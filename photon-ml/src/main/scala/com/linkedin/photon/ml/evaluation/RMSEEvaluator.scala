@@ -18,31 +18,35 @@ import org.apache.spark.rdd.RDD
 
 
 /**
- * Evaluator for root mean squared error (RMSE)
- *
- * @param labelAndOffsetAndWeights a [[RDD]] of (id, (labels, offsets, weights)) pairs
- */
+  * Evaluator for root mean squared error
+  *
+  * @param labelAndOffsetAndWeights a [[RDD]] of (id, (labels, offsets, weights)) pairs
+  * @param defaultScore the default score used to compute the metric
+  * @author xazhang
+  */
 protected[ml] class RMSEEvaluator(
-    override protected[ml] val labelAndOffsetAndWeights: RDD[(Long, (Double, Double, Double))]) extends Evaluator {
+    labelAndOffsetAndWeights: RDD[(Long, (Double, Double, Double))],
+    defaultScore: Double = 0.0) extends Evaluator {
 
-  protected[ml]  val evaluatorType = RMSE
+  val squaredLossEvaluator = new SquaredLossEvaluator(labelAndOffsetAndWeights, defaultScore)
 
-  private val squaredLossEvaluator = new SquaredLossEvaluator(labelAndOffsetAndWeights)
-
-  override protected[ml] def evaluateWithScoresAndLabelsAndWeights(
-    scoresAndLabelsAndWeights: RDD[(Long, (Double, Double, Double))]): Double = {
-
-    val squaredLoss = squaredLossEvaluator.evaluateWithScoresAndLabelsAndWeights(scoresAndLabelsAndWeights)
-    math.sqrt( squaredLoss / labelAndOffsetAndWeights.count())
+  /**
+    * Evaluate the scores of the model
+    *
+    * @param scores the scores to evaluate
+    * @return score metric value
+    */
+  override def evaluate(scores: RDD[(Long, Double)]): Double = {
+    math.sqrt(squaredLossEvaluator.evaluate(scores) / labelAndOffsetAndWeights.count())
   }
 
   /**
-   * Determine the best between two scores returned by the evaluator. In some cases, the better score is higher
-   * (e.g. AUC) and in others, the better score is lower (e.g. RMSE).
-   *
-   * @param score1 the first score to compare
-   * @param score2 the second score to compare
-   * @return true if the first score is better than the second
-   */
+    * Determine the best between two scores returned by the evaluator. In some cases, the better score is higher
+    * (e.g. AUC) and in others, the better score is lower (e.g. RMSE).
+    *
+    * @param score1 the first score to compare
+    * @param score2 the second score to compare
+    * @return true if the first score is better than the second
+    */
   override def betterThan(score1: Double, score2: Double): Boolean = score1 < score2
 }

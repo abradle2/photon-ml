@@ -22,6 +22,7 @@ import com.linkedin.photon.ml.stat.BasicStatisticalSummary
 import com.linkedin.photon.ml.supervised.model.{CoefficientSummary, GeneralizedLinearModel}
 import org.apache.spark.rdd.RDD
 
+
 class BootstrapTrainingDiagnostic(
     private val unparsedNameTermToIndex: Map[String, Int],
     private val numSamples: Int = BootstrapTrainingDiagnostic.DEFAULT_BOOTSTRAP_SAMPLES,
@@ -48,7 +49,7 @@ class BootstrapTrainingDiagnostic(
         }
         val model = models.get(lambda)
         val c = model match {
-          case Some(g: GeneralizedLinearModel) => math.abs(g.coefficients.means(idx))
+          case Some(g: GeneralizedLinearModel) => math.abs(g.coefficients(idx))
           case _ => 1.0
         }
         val importance = value * c

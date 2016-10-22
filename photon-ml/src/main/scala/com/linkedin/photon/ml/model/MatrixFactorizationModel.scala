@@ -15,11 +15,13 @@
 package com.linkedin.photon.ml.model
 
 import breeze.linalg.{Vector, norm}
-import com.linkedin.photon.ml.RDDLike
-import com.linkedin.photon.ml.data.{GameDatum, KeyValueScore}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+
+import com.linkedin.photon.ml.RDDLike
+import com.linkedin.photon.ml.data.{GameDatum, KeyValueScore}
+
 
 /**
  * Representation of a matrix factorization model
@@ -33,7 +35,7 @@ class MatrixFactorizationModel(
     val rowEffectType: String,
     val colEffectType: String,
     val rowLatentFactors: RDD[(String, Vector[Double])],
-    val colLatentFactors: RDD[(String, Vector[Double])]) extends DatumScoringModel with RDDLike {
+    val colLatentFactors: RDD[(String, Vector[Double])]) extends Model with RDDLike {
 
   /**
    * Number of latent factors of the matrix factorization model (or the rank)
@@ -113,10 +115,9 @@ object MatrixFactorizationModel {
 
   /**
    * Check whether two latent factors are the same
-   *
-   * @param latentFactors1 The first latent factor
-   * @param latentFactors2 The second latent factor
-   * @return True if the two latent factors are the same, false otherwise
+   * @param latentFactors1 the first latent factor
+   * @param latentFactors2 the second latent factor
+   * @return true if the two latent factors are the same, false otherwise
    */
   protected def isSameLatentFactors(
     latentFactors1: RDD[(String, Vector[Double])],
@@ -130,13 +131,12 @@ object MatrixFactorizationModel {
 
   /**
    * Score the given GAME data points with the row and column latent factors
-   *
-   * @param dataPoints The GAME data points
-   * @param rowEffectType The type of row effect used to retrieve row effect id from each GAME data point
-   * @param colEffectType The type of column effect used to retrieve column effect id from each GAME data point
-   * @param rowLatentFactors The row latent factors
-   * @param colLatentFactors The col latent factors
-   * @return The computed scores
+   * @param dataPoints the GAME data points
+   * @param rowEffectType the type of row effect used to retrieve row effect id from each GAME data point
+   * @param colEffectType the type of column effect used to retrieve column effect id from each GAME data point
+   * @param rowLatentFactors the row latent factors
+   * @param colLatentFactors the col latent factors
+   * @return the computed scores
    */
   protected def score(
       dataPoints: RDD[(Long, GameDatum)],
@@ -148,15 +148,15 @@ object MatrixFactorizationModel {
     val scores = dataPoints
       //For each datum, collect a (rowEffectId, (colEffectId, uniqueId)) tuple.
       .map { case (uniqueId, gameData) =>
-      val rowEffectId = gameData.idTypeToValueMap(rowEffectType)
-      val colEffectId = gameData.idTypeToValueMap(colEffectType)
+      val rowEffectId = gameData.randomEffectIdToIndividualIdMap(rowEffectType)
+      val colEffectId = gameData.randomEffectIdToIndividualIdMap(colEffectType)
       (rowEffectId, (colEffectId, uniqueId))
     }
       .cogroup(rowLatentFactors)
       // Decorate rowEffectId with row latent factors
       .flatMap { case (rowEffectId, (colEffectIdAndUniqueIdsIterable, rowLatentFactorIterable)) =>
       assert(rowLatentFactorIterable.size <= 1, s"More than one row latent factor (${rowLatentFactorIterable.size}) " +
-        s"found for random effect id $rowEffectId of random effect type $rowEffectType")
+        s"found for random effect Id $rowEffectId of random effect type $rowEffectType")
       colEffectIdAndUniqueIdsIterable.flatMap { case (colEffectId, uniqueId) =>
         rowLatentFactorIterable.map(rowLatentFactor => (colEffectId, (rowLatentFactor, uniqueId)))
       }
@@ -165,7 +165,7 @@ object MatrixFactorizationModel {
       .cogroup(colLatentFactors)
       .flatMap { case (colEffectId, (rowLatentFactorAndUniqueIdsIterable, colLatentFactorIterable)) =>
         val size = colLatentFactorIterable.size
-      assert(size <= 1, s"More than one column latent factor ($size) found for random effect id $colEffectId of " +
+      assert(size <= 1, s"More than one column latent factor ($size) found for random effect Id $colEffectId of " +
         s"random effect type $colEffectType")
       rowLatentFactorAndUniqueIdsIterable.flatMap { case (rowLatentFactor, uniqueId) =>
         colLatentFactorIterable.map(colLatentFactor => (uniqueId, (rowLatentFactor, colLatentFactor)))

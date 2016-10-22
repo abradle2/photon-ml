@@ -27,10 +27,7 @@ import com.linkedin.photon.ml.avro.data.NameAndTerm
 import com.linkedin.photon.ml.avro.model.ModelProcessingUtils
 import com.linkedin.photon.ml.constants.MathConst
 import com.linkedin.photon.ml.model._
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
-import com.linkedin.photon.ml.supervised.classification.LogisticRegressionModel
 import com.linkedin.photon.ml.test.{SparkTestUtils, TestTemplateWithTmpDir}
-import com.linkedin.photon.ml.util._
 
 class ModelProcessingUtilsTest extends SparkTestUtils with TestTemplateWithTmpDir {
 
@@ -44,26 +41,17 @@ class ModelProcessingUtilsTest extends SparkTestUtils with TestTemplateWithTmpDi
     // Features
     val featureShardId = "featureShardId"
     val featureNameAndTermToIndexMap = Array.tabulate(coefficientDimension)( i => (NameAndTerm("n", "t"), i) ).toMap
-    val indexMapLoader = new DefaultIndexMapLoader(
-      featureNameAndTermToIndexMap.map { case (nat, i) => (Utils.getFeatureKey(nat.name, nat.term), i) }.toMap)
-    indexMapLoader.prepare(sc, null)
-
-    val featureShardIdToFeatureNameAndTermToIndexMapMap = Map(featureShardId -> indexMapLoader)
+    val featureShardIdToFeatureNameAndTermToIndexMapMap = Map(featureShardId -> featureNameAndTermToIndexMap)
 
     // Fixed effect model
-    val glm: GeneralizedLinearModel = new LogisticRegressionModel(coefficients)
-
-    val coefficientsBC = sc.broadcast(glm)
+    val coefficientsBC = sc.broadcast(coefficients)
     val fixedEffectModel = new FixedEffectModel(coefficientsBC, featureShardId)
 
     // Random effect model
     val numCoefficients = 5
-    val randomEffectType = "randomEffectType"
-    val coefficientsRE = Seq.tabulate(numCoefficients)(i => (i.toString, coefficients))
-    val glmRE: GeneralizedLinearModel = new LogisticRegressionModel(coefficients)
-
-    val glmReRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, glmRE)))
-    val randomEffectModel = new RandomEffectModel(glmReRDD, randomEffectType, featureShardId)
+    val randomEffectId = "randomEffectId"
+    val coefficientsRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, coefficients)))
+    val randomEffectModel = new RandomEffectModel(coefficientsRDD, randomEffectId, featureShardId)
 
     // GAME model
     val fixedEffectModelName = "fixed"
@@ -91,8 +79,8 @@ class ModelProcessingUtilsTest extends SparkTestUtils with TestTemplateWithTmpDi
           s"found: $numRandomEffectModelFiles")
 
     // Check if the models loaded correctly and they are the same as the models saved previously
-    val loadedGameModel = ModelProcessingUtils.loadGameModelFromHDFS(
-      featureShardIdToFeatureNameAndTermToIndexMapMap, outputDir, sc)
+    val loadedGameModel = ModelProcessingUtils.loadGameModelFromHDFS(featureShardIdToFeatureNameAndTermToIndexMapMap,
+      outputDir, sc)
     assertEquals(loadedGameModel, gameModel)
   }
 

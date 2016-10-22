@@ -14,87 +14,80 @@
  */
 package com.linkedin.photon.ml.algorithm
 
+
 import com.linkedin.photon.ml.constants.StorageLevel
-import com.linkedin.photon.ml.data.{FixedEffectDataSet, KeyValueScore, LabeledPoint}
-import com.linkedin.photon.ml.function.DiffFunction
-import com.linkedin.photon.ml.model.{DatumScoringModel, FixedEffectModel}
-import com.linkedin.photon.ml.normalization.NoNormalization
-import com.linkedin.photon.ml.optimization.GeneralizedLinearOptimizationProblem
-import com.linkedin.photon.ml.optimization.game.{FixedEffectOptimizationTracker, OptimizationTracker}
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
+import com.linkedin.photon.ml.data.{KeyValueScore, FixedEffectDataSet, LabeledPoint}
+import com.linkedin.photon.ml.function.TwiceDiffFunction
+import com.linkedin.photon.ml.model.{Coefficients, FixedEffectModel, Model}
+import com.linkedin.photon.ml.optimization.game.{
+  FixedEffectOptimizationTracker, OptimizationTracker, OptimizationProblem}
 import com.linkedin.photon.ml.util.PhotonLogger
 
 /**
  * The optimization problem coordinate for a fixed effect model
  *
- * @param fixedEffectDataSet The training dataset
- * @param optimizationProblem The fixed effect optimization problem
+ * @param fixedEffectDataSet the training dataset
+ * @param optimizationProblem the fixed effect optimization problem
+ * @author xazhang
  */
-protected[ml] class FixedEffectCoordinate[GLM <: GeneralizedLinearModel, F <: DiffFunction[LabeledPoint]](
+protected[ml] class FixedEffectCoordinate[F <: TwiceDiffFunction[LabeledPoint]](
     fixedEffectDataSet: FixedEffectDataSet,
-    private var optimizationProblem: GeneralizedLinearOptimizationProblem[GLM, F])
-  extends Coordinate[FixedEffectDataSet, FixedEffectCoordinate[GLM, F]](fixedEffectDataSet) {
+    private var optimizationProblem: OptimizationProblem[F])
+  extends Coordinate[FixedEffectDataSet, FixedEffectCoordinate[F]](fixedEffectDataSet) {
 
   /**
    * Initialize the model
    *
-   * @param seed Random seed
+   * @param seed random seed
    */
   protected[algorithm] def initializeModel(seed: Long): FixedEffectModel = {
-    val numFeatures = fixedEffectDataSet.numFeatures
-    val generalizedLinearModel = optimizationProblem.initializeZeroModel(numFeatures)
-    val generalizedLinearModelBroadcast = fixedEffectDataSet.sparkContext.broadcast(
-      generalizedLinearModel.asInstanceOf[GeneralizedLinearModel])
-    val featureShardId = fixedEffectDataSet.featureShardId
-    new FixedEffectModel(generalizedLinearModelBroadcast, featureShardId)
+    FixedEffectCoordinate.initializeZeroModel(fixedEffectDataSet)
   }
 
   /**
    * Update the coordinate with a dataset
    *
-   * @param fixedEffectDataSet The updated dataset
-   * @return The updated coordinate
+   * @param fixedEffectDataSet the updated dataset
+   * @return the updated coordinate
    */
-  override protected def updateCoordinateWithDataSet(fixedEffectDataSet: FixedEffectDataSet)
-    : FixedEffectCoordinate[GLM, F] = new FixedEffectCoordinate[GLM, F](fixedEffectDataSet, optimizationProblem)
+  override protected def updateCoordinateWithDataSet(
+      fixedEffectDataSet: FixedEffectDataSet): FixedEffectCoordinate[F] = {
+    new FixedEffectCoordinate[F](fixedEffectDataSet, optimizationProblem)
+  }
 
   /**
    * Update the model
    *
-   * @param model The model to update
+   * @param model the model to update
    */
-  protected[algorithm] override def updateModel(model: DatumScoringModel)
-    : (DatumScoringModel, OptimizationTracker) = model match {
+  protected[algorithm] override def updateModel(model: Model): (Model, OptimizationTracker) = {
+    model match {
+      case fixedEffectModel: FixedEffectModel =>
+        val (updatedFixedEffectModel, updatedOptimizationProblem) =
+          FixedEffectCoordinate.updateModel(fixedEffectDataSet, optimizationProblem, fixedEffectModel)
 
-    case fixedEffectModel: FixedEffectModel =>
-      val (updatedFixedEffectModel, updatedOptimizationProblem) = FixedEffectCoordinate.updateModel(
-        fixedEffectDataSet,
-        optimizationProblem,
-        fixedEffectModel)
-      //Note that the optimizationProblem will memorize the current state of optimization,
-      //and the next round of updating global models will share the same convergence criteria as this one.
-      optimizationProblem = updatedOptimizationProblem
+        //Note that the optimizationProblem will memorize the current state of optimization,
+        //and the next round of updating global models will share the same convergence criteria as this one.
+        optimizationProblem = updatedOptimizationProblem
+        val optimizationTracker = new FixedEffectOptimizationTracker(optimizationProblem.optimizer.getStateTracker.get)
+        (updatedFixedEffectModel, optimizationTracker)
 
-      val optimizationTracker = new FixedEffectOptimizationTracker(optimizationProblem.getStatesTracker.get)
-
-      (updatedFixedEffectModel, optimizationTracker)
-
-    case _ =>
-      throw new UnsupportedOperationException(s"Updating model of type ${model.getClass} in ${this.getClass} is " +
-          s"not supported!")
+      case _ =>
+        throw new UnsupportedOperationException(s"Updating model of type ${model.getClass} in ${this.getClass} is " +
+            s"not supported!")
+    }
   }
 
   /**
    * Score the model
    *
-   * @param model The model to score
-   * @return Scores
+   * @param model the model to score
+   * @return scores
    */
-  protected[algorithm] def score(model: DatumScoringModel): KeyValueScore = {
+  protected[algorithm] def score(model: Model): KeyValueScore = {
     model match {
       case fixedEffectModel: FixedEffectModel =>
         FixedEffectCoordinate.updateScore(fixedEffectDataSet, fixedEffectModel)
-
       case _ =>
         throw new UnsupportedOperationException(s"Updating scores with model of type ${model.getClass} " +
             s"in ${this.getClass} is not supported!")
@@ -104,14 +97,13 @@ protected[ml] class FixedEffectCoordinate[GLM <: GeneralizedLinearModel, F <: Di
   /**
    * Compute the regularization term value
    *
-   * @param model The model
-   * @return Regularization term value
+   * @param model the model
+   * @return regularization term value
    */
-  protected[algorithm] def computeRegularizationTermValue(model: DatumScoringModel): Double = {
+  protected[algorithm] def computeRegularizationTermValue(model: Model): Double = {
     model match {
       case fixedEffectModel: FixedEffectModel =>
-        optimizationProblem.getRegularizationTermValue(fixedEffectModel.model)
-
+        optimizationProblem.getRegularizationTermValue(fixedEffectModel.coefficients)
       case _ =>
         throw new UnsupportedOperationException(s"Compute the regularization term value with model of " +
             s"type ${model.getClass} in ${this.getClass} is not supported!")
@@ -121,38 +113,49 @@ protected[ml] class FixedEffectCoordinate[GLM <: GeneralizedLinearModel, F <: Di
   /**
    * Summarize the coordinate state
    *
-   * @param logger A logger instance
+   * @param logger a logger instance
    */
   protected[algorithm] def summarize(logger: PhotonLogger): Unit = {
-    logger.debug(s"Optimization stats: ${optimizationProblem.getStatesTracker.get}")
+    logger.debug(s"Optimization stats: ${optimizationProblem.optimizer.getStateTracker.get}")
   }
 }
 
 object FixedEffectCoordinate {
+
+  /**
+   * Initialize a zero model
+   *
+   * @param fixedEffectDataSet the dataset
+   */
+  private def initializeZeroModel(fixedEffectDataSet: FixedEffectDataSet): FixedEffectModel = {
+    val numFeatures = fixedEffectDataSet.numFeatures
+    val coefficients = Coefficients.initializeZeroCoefficients(numFeatures)
+    val coefficientsBroadcast = fixedEffectDataSet.sparkContext.broadcast(coefficients)
+    val featureShardId = fixedEffectDataSet.featureShardId
+    new FixedEffectModel(coefficientsBroadcast, featureShardId)
+  }
+
   /**
    * Update the model (i.e. run the coordinate optimizer)
    *
-   * @param fixedEffectDataSet The dataset
-   * @param optimizationProblem The optimization problem
-   * @param fixedEffectModel The model
-   * @return Tuple of updated model and optimization tracker
+   * @param fixedEffectDataSet the dataset
+   * @param optimizationProblem the optimization problem
+   * @param fixedEffectModel the model
+   * @return tuple of updated model and optimization tracker
    */
-  private def updateModel[GLM <: GeneralizedLinearModel, F <: DiffFunction[LabeledPoint]](
+  private def updateModel[F <: TwiceDiffFunction[LabeledPoint]](
       fixedEffectDataSet: FixedEffectDataSet,
-      optimizationProblem: GeneralizedLinearOptimizationProblem[GLM, F],
-      fixedEffectModel: FixedEffectModel): (FixedEffectModel, GeneralizedLinearOptimizationProblem[GLM, F]) = {
+      optimizationProblem: OptimizationProblem[F],
+      fixedEffectModel: FixedEffectModel): (FixedEffectModel, OptimizationProblem[F]) = {
 
-    val trainingData = optimizationProblem
-      .downSample(fixedEffectDataSet.labeledPoints)
-      .setName("In memory fixed effect training data set")
-      .persist(StorageLevel.FREQUENT_REUSE_RDD_STORAGE_LEVEL)
-    val model = fixedEffectModel.model
-    // TODO: Allow normalization
-    val updateModel = optimizationProblem.run(trainingData.values, model, NoNormalization)
-    val updateModelBroadcast = fixedEffectDataSet
-      .sparkContext
-      .broadcast(updateModel.asInstanceOf[GeneralizedLinearModel])
-    val updatedFixedEffectModel = fixedEffectModel.update(updateModelBroadcast)
+    val sampler = optimizationProblem.sampler
+    val trainingData = sampler.downSample(fixedEffectDataSet.labeledPoints)
+        .setName("In memory fixed effect training data set")
+        .persist(StorageLevel.FREQUENT_REUSE_RDD_STORAGE_LEVEL)
+    val coefficients = fixedEffectModel.coefficients
+    val (updatedCoefficients, _) = optimizationProblem.updateCoefficientMeans(trainingData.values, coefficients)
+    val updatedCoefficientsBroadcast = fixedEffectDataSet.sparkContext.broadcast(updatedCoefficients)
+    val updatedFixedEffectModel = fixedEffectModel.update(updatedCoefficientsBroadcast)
     trainingData.unpersist()
 
     (updatedFixedEffectModel, optimizationProblem)
@@ -161,14 +164,14 @@ object FixedEffectCoordinate {
   /**
    * Compute updated scores
    *
-   * @param fixedEffectDataSet The dataset
-   * @param fixedEffectModel The model
-   * @return Scores
+   * @param fixedEffectDataSet the dataset
+   * @param fixedEffectModel the model
+   * @return scores
    */
   private def updateScore(fixedEffectDataSet: FixedEffectDataSet, fixedEffectModel: FixedEffectModel): KeyValueScore = {
-    val modelBroadcast = fixedEffectModel.modelBroadcast
+    val coefficientsBroadcast = fixedEffectModel.coefficientsBroadcast
     val scores = fixedEffectDataSet.labeledPoints.mapValues { case LabeledPoint(_, features, _, _) =>
-      modelBroadcast.value.computeScore(features)
+      coefficientsBroadcast.value.computeScore(features)
     }
 
     new KeyValueScore(scores)

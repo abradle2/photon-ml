@@ -14,46 +14,34 @@
  */
 package com.linkedin.photon.ml.data
 
-import breeze.linalg.Vector
-
 import scala.collection.Map
+
+import breeze.linalg.Vector
 
 /**
  * Representation of a single GAME data point
  *
- * @param response The response or label
- * @param offsetOpt An optional field for offset
- * @param weightOpt An optional field for importance weight
- * @param featureShardContainer The sharded feature vectors
- * @param idTypeToValueMap The id type to value map that holds different types of ids associated with this data
- *                         point. A few examples of the ids types are: (i) ids used to build the random effect model
- *                         such as userId and itemId; (ii) ids used to compute certain metrics like precision@k such
- *                         as documentId or queryId; (iii) ids that are used to uniquely identify each training record.
+ * @param response the response or label
+ * @param offset the offset
+ * @param weight the importance weight
+ * @param featureShardContainer the sharded feature vectors
+ * @param randomEffectIdToIndividualIdMap a map from random effect type id to actual individual id
+ *   (e.g. "memberId" -> "1234" or "itemId" -> "abcd")
  */
 protected[ml] class GameDatum(
     val response: Double,
-    val offsetOpt: Option[Double],
-    val weightOpt: Option[Double],
+    val offset: Double,
+    val weight: Double,
     val featureShardContainer: Map[String, Vector[Double]],
-    val idTypeToValueMap: Map[String, String]) extends Serializable {
-
-  import GameDatum._
-
-  val offset = offsetOpt.getOrElse(DEFAULT_OFFSET)
-  val weight = weightOpt.getOrElse(DEFAULT_WEIGHT)
+    val randomEffectIdToIndividualIdMap: Map[String, String]) extends Serializable {
 
   /**
    * Build a labeled point with sharded feature container
    *
-   * @param featureShardId The feature shard id
-   * @return The new labeled point
+   * @param featureShardId the feature shard id
+   * @return the new labeled point
    */
   def generateLabeledPointWithFeatureShardId(featureShardId: String): LabeledPoint = {
-    LabeledPoint(label = response, features = featureShardContainer(featureShardId), offset = offset, weight = weight)
+    LabeledPoint(response, featureShardContainer(featureShardId), offset, weight)
   }
-}
-
-object GameDatum {
-  val DEFAULT_OFFSET = 0.0
-  val DEFAULT_WEIGHT = 1.0
 }

@@ -15,19 +15,12 @@
 package com.linkedin.photon.ml.optimization
 
 import com.linkedin.photon.ml.optimization.OptimizerType.OptimizerType
-import com.linkedin.photon.ml.util.Summarizable
 
 /**
  * Contains configuration information for Optimizer instances.
  */
 case class OptimizerConfig(
-    optimizerType: OptimizerType,
-    maximumIterations: Int,
-    tolerance: Double,
-    constraintMap: Option[Map[Int, (Double, Double)]])
-  extends Summarizable {
-
-  // TODO: Add constraintMap to summary
-  override def toSummaryString: String =
-    s"optimizerType = $optimizerType, maximumIterations = $maximumIterations, tolerance = $tolerance"
-}
+  optimizerType: OptimizerType,
+  maximumIterations: Int,
+  tolerance: Double,
+  constraintMap: Option[Map[Int, (Double, Double)]])

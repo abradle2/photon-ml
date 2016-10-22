@@ -21,6 +21,9 @@ import com.linkedin.photon.ml.supervised.regression.Regression
 import org.apache.spark.rdd.RDD
 
 
+/**
+ * @author asaha
+ */
 class PredictionNonNegativeValidator extends ModelValidator[GeneralizedLinearModel] {
 
   override def validateModelPredictions(model:GeneralizedLinearModel, data:RDD[LabeledPoint]) : Unit = {

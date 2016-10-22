@@ -33,6 +33,8 @@ import org.apache.spark.rdd.RDD
  *
  * @param func A single loss function for the generalized linear model
  * @param dim The dimension (number of features) of the aggregator
+ *
+ * @author dpeng
  */
 @SerialVersionUID(2L)
 protected[ml] class HessianVectorAggregator(func: PointwiseLossFunction, dim: Int)

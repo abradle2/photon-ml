@@ -14,7 +14,6 @@
  */
 package com.linkedin.photon.ml.function
 
-import com.linkedin.photon.ml.constants.MathConst
 import com.linkedin.photon.ml.data.{ObjectProvider, SimpleObjectProvider}
 import com.linkedin.photon.ml.normalization.{NoNormalization, NormalizationContext}
 import com.linkedin.photon.ml.util.Utils
@@ -26,6 +25,8 @@ import com.linkedin.photon.ml.util.Utils
  * for label, features, offset, and weight of the i'th labeled data point, respectively.
  * Note that the above equation assumes the label y_i \in {0, 1}. However, the code below would also work when
  * y_i \in {-1, 1}.
+ * @author xazhang
+ * @author dpeng
  */
 class LogisticLossFunction(normalizationContext: ObjectProvider[NormalizationContext] =
     new SimpleObjectProvider[NormalizationContext](NoNormalization))
@@ -34,14 +35,15 @@ class LogisticLossFunction(normalizationContext: ObjectProvider[NormalizationCon
 /**
  * A single logistic loss function
  *
- * l(z, y) = - log [1 / (1 + exp(-z))]           if this is a positive sample
+ * l(z, y) = - log [1/(1+exp(-z))]         if this is a positive sample
  *
- *           - log [1 - (1 / (1 + exp(-z)))]     if this is a negative sample
+ *         or - log [1 - 1/(1+exp(-z))]    if this is a negative sample
+ *
  */
 @SerialVersionUID(1L)
 object PointwiseLogisticLossFunction extends PointwiseLossFunction {
   /**
-   * The sigmoid function 1 / (1 + exp(-z))
+   * The sigmoid function 1/(1+exp(-z))
    *
    * @param z z
    * @return The value
@@ -50,20 +52,20 @@ object PointwiseLogisticLossFunction extends PointwiseLossFunction {
 
 
   /**
-   * l(z, y) = - log [1 / (1 + exp(-z))]       = log [1 + exp(-z)]     if this is a positive sample
+   * l(z, y) = - log [1 / (1 + exp(-z))] = log [1 + exp(-z)]            if this is a positive sample
    *
-   *           - log [1 - (1 / (1 + exp(-z)))] = log [1 + exp(z)]      if this is a negative sample
+   *           - log [1 - 1/(1+exp(-z))] = log [1 + exp(z)]             if this is a negative sample
    *
-   * dl/dz   = -1 / (1 + exp(z))         if this is a positive sample
+   * dl/dz =  - 1 / (1 + exp(z))         if this is a positive sample
    *
-   *           1 / (1 + exp(-z))          if this is a negative sample
+   *          1 / (1 + exp(-z))          if this is a negative sample
    *
    * @param margin The margin, i.e. z in l(z, y)
    * @param label The label, i.e. y in l(z, y)
    * @return The value and the 1st derivative
    */
   override def loss(margin: Double, label: Double): (Double, Double) = {
-    if (label > MathConst.POSITIVE_RESPONSE_THRESHOLD) {
+    if (label > 0) {
       // The following is equivalent to log(1 + exp(-margin)) but more numerically stable.
       (Utils.log1pExp(-margin), - sigmoid(-margin))
     } else {

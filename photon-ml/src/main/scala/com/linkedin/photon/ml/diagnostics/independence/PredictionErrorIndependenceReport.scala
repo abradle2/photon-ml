@@ -21,9 +21,9 @@ import com.linkedin.photon.ml.diagnostics.reporting.LogicalReport
  *
  * @param errorSample Sample of errors. This should have same length as [[predictionSample]]
  * @param predictionSample Sample of predictions. This should have the same length as [[errorSample]]
- * @param kendallTau Kendall &tau; independence test report
+ * @param kentallTau Kendall &tau; independence test report
  */
 case class PredictionErrorIndependenceReport(val errorSample: Array[Double],
                                              val predictionSample: Array[Double],
-                                             val kendallTau: KendallTauReport) extends LogicalReport
+                                             val kentallTau: KendallTauReport) extends LogicalReport
 

@@ -16,20 +16,25 @@ package com.linkedin.photon.ml.sampler
 
 import java.util.Random
 
+import org.apache.spark.rdd.RDD
+
 import com.linkedin.photon.ml.constants.MathConst
 import com.linkedin.photon.ml.data.LabeledPoint
-import org.apache.spark.rdd.RDD
 
 /**
  * Interface for down-sampler implementations
+ *
+ * @author xazhang
+ * @author nkatariy
  */
 protected[ml] trait DownSampler {
+
   /**
-   * Down-sample a dataset
+   * Down-sample the dataset
    *
-   * @param labeledPoints The dataset to down-sample
-   * @param seed A random seed for down-sampling
-   * @return The down-sampled dataset
+   * @param labeledPoints the dataset
+   * @param seed random seed
+   * @return down-sampled dataset
    */
   def downSample(labeledPoints: RDD[(Long, LabeledPoint)], seed: Long = DownSampler.getSeed): RDD[(Long, LabeledPoint)]
 }

@@ -33,8 +33,8 @@ import com.linkedin.photon.ml.util._
  * A class contain [[NameAndTerm]] features sets for each feature section keys
  * @param nameAndTermFeatureSets A [[Map]] of feature section key to [[NameAndTerm]] feature sets
  */
-// TODO: Change the scope to [[com.linkedin.photon.ml.avro]] after Avro related classes/functions are decoupled from the
-// rest of code
+//TODO: Change the scope to [[com.linkedin.photon.ml.avro]] after Avro related classes/functons are decoupled from the
+//rest of code
 protected[ml] class NameAndTermFeatureSetContainer(nameAndTermFeatureSets: Map[String, Set[NameAndTerm]]) {
 
   /**
@@ -225,9 +225,8 @@ object NameAndTermFeatureSetContainer {
         numExecutors * 5
       }
     val records = AvroUtils.readAvroFiles(sparkContext, inputRecordsPath, minPartitions)
-    // numExecutors * 5 is too much for distinct operation when the data are huge. Use numExecutors instead.
     val nameAndTermFeatureSetContainer =
-      AvroUtils.readNameAndTermFeatureSetContainerFromGenericRecords(records, featureSectionKeys, numExecutors)
+      AvroUtils.readNameAndTermFeatureSetContainerFromGenericRecords(records, featureSectionKeys)
     nameAndTermFeatureSetContainer.saveAsTextFiles(featureNameAndTermSetOutputPath, sparkContext)
 
     sparkContext.stop()

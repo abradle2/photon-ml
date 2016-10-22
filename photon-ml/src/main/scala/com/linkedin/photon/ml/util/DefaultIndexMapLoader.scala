@@ -22,6 +22,8 @@ import org.apache.spark.broadcast.Broadcast
 
 /**
   * A loader that provides instances of DefaultIndexMap
+  *
+  * @author yizhou
   */
 class DefaultIndexMapLoader(@transient val featureNameToIdMap: Map[String, Int]) extends IndexMapLoader {
   @transient
@@ -32,7 +34,7 @@ class DefaultIndexMapLoader(@transient val featureNameToIdMap: Map[String, Int])
   /**
     * Prepare a loader, should be called early before anything
     */
-  override def prepare(sc: SparkContext, params: IndexMapParams, namespace: String): Unit = {
+  override def prepare(sc: SparkContext, params: Params): Unit = {
     // do nothing
     _indexMap = new DefaultIndexMap(featureNameToIdMap)
     _mapBroadCaster = sc.broadcast(featureNameToIdMap)

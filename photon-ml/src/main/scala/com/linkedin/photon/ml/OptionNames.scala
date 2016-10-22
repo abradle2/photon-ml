@@ -16,6 +16,9 @@ package com.linkedin.photon.ml
 
 /**
  * A collection of option names used in Photon-ML
+ * @author xazhang
+ * @author dpeng
+ * @author nkatariy
  */
 object OptionNames {
   val HELP_OPTION = "help"
@@ -48,9 +51,6 @@ object OptionNames {
   val OFFHEAP_INDEXMAP_NUM_PARTITIONS = "offheap-indexmap-num-partitions"
 
   val DELETE_OUTPUT_DIRS_IF_EXIST = "delete-output-dirs-if-exist"
-
-  val FEATURE_DIMENSION = "feature-dimension"
-  val INPUT_FILE_FORMAT = "input-file-format"
 
   @deprecated
   val TRAINING_DIAGNOSTICS = "training-diagnostics"

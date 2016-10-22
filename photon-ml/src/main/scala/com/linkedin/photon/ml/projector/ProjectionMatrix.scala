@@ -16,10 +16,10 @@ package com.linkedin.photon.ml.projector
 
 import java.util.Random
 
-import breeze.linalg.{DenseMatrix, Matrix, Vector, norm}
 import breeze.stats.meanAndVariance
+import breeze.linalg.{norm, Vector, DenseMatrix, Matrix}
+
 import com.linkedin.photon.ml.constants.MathConst
-import com.linkedin.photon.ml.util.Summarizable
 
 /**
  * A class for projection matrix that is used to project the features from their original space to a different
@@ -27,8 +27,10 @@ import com.linkedin.photon.ml.util.Summarizable
  *
  * @param matrix The projection matrix. Currently, only dense matrices are supported for projection. An exception
  *               is thrown if any other type of matrix is passed
+ * @author xazhang
+ * @author nkatariy
  */
-protected[ml] case class ProjectionMatrix(matrix: Matrix[Double]) extends Projector with Summarizable {
+protected[ml] case class ProjectionMatrix(matrix: Matrix[Double]) extends Projector {
   matrix match {
     case x: DenseMatrix[Double] =>
     case _ => throw new UnsupportedOperationException(s"Projection matrix of class ${matrix.getClass} for features " +
@@ -41,8 +43,8 @@ protected[ml] case class ProjectionMatrix(matrix: Matrix[Double]) extends Projec
   /**
    * Project features into the new space
    *
-   * @param features The features
-   * @return Projected features
+   * @param features the features
+   * @return projected features
    */
   override def projectFeatures(features: Vector[Double]): Vector[Double] = {
     matrix * features
@@ -51,8 +53,8 @@ protected[ml] case class ProjectionMatrix(matrix: Matrix[Double]) extends Projec
   /**
    * Project coefficients into the new space
    *
-   * @param coefficients The coefficients
-   * @return Projected coefficients
+   * @param coefficients the coefficients
+   * @return projected coefficients
    */
   override def projectCoefficients(coefficients: Vector[Double]): Vector[Double] = {
     matrix match {
@@ -61,7 +63,12 @@ protected[ml] case class ProjectionMatrix(matrix: Matrix[Double]) extends Projec
     }
   }
 
-  override def toSummaryString: String = {
+  /**
+   * Build a summary string for the coefficients
+   *
+   * @return string representation
+   */
+  def toSummaryString: String = {
     val stringBuilder = new StringBuilder()
     stringBuilder.append(s"meanAndVarianceAndCount of the flattened matrix: ${meanAndVariance(matrix.flatten())}")
     stringBuilder.append(s"\nmeanAndVarianceAndCount of the squared flattened matrix: " +

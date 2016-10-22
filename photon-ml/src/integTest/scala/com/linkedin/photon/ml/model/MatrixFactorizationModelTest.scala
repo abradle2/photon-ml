@@ -65,9 +65,9 @@ class MatrixFactorizationModelTest extends SparkTestUtils {
     val (gameData, syntheticScores) = rowRange.zip(colRange).map { case (row, col) =>
       val rowId = row.toString
       val colId = col.toString
-      val randomEffectTypeToIdMap = Map(rowEffectType -> rowId, colEffectType -> colId)
-      val gameDatum = new GameDatum(response = 1.0, offsetOpt = None, weightOpt = None, featureShardContainer = Map(),
-        idTypeToValueMap = randomEffectTypeToIdMap)
+      val randomEffectIdToIndividualIdMap = Map(rowEffectType -> rowId, colEffectType -> colId)
+      val gameDatum = new GameDatum(response = 1.0, offset = 0.0, weight = 0.0, featureShardContainer = Map(),
+        randomEffectIdToIndividualIdMap = randomEffectIdToIndividualIdMap)
       val score = rowLatentFactors(row)._2.dot(colLatentFactors(col)._2)
       (gameDatum, score)
     }

@@ -17,32 +17,51 @@ package com.linkedin.photon.ml.evaluation
 import java.util.{Comparator => JComparator, Arrays => JArrays}
 import java.lang.{Double => JDouble}
 
+import scala.collection.Map
+
 import com.linkedin.photon.ml.constants.MathConst._
 
 
 /**
- * Local evaluator for Area Under ROC curve
+ * Local evaluator for binary classification problems
+ *
+ * @param labelAndOffsetAndWeights a (id -> (label, offset, weight)) map
+ * @param defaultScore the default score used to compute the metric
  */
-protected[ml] object AreaUnderROCCurveLocalEvaluator extends LocalEvaluator {
+protected[ml] class AreaUnderROCCurveLocalEvaluator(
+    labelAndOffsetAndWeights: Map[Long, (Double, Double, Double)],
+    defaultScore: Double = 0.0) extends LocalEvaluator {
 
-  protected[ml] override def evaluate(scoreLabelAndWeights: Array[(Double, Double, Double)]): Double = {
+  def this(labels: Map[Long, Double]) = this(labels.mapValues(label => (label, DEFAULT_OFFSET, DEFAULT_WEIGHT)))
 
-    //Directly calling scoresAndLabelAndWeight.sort would cause some performance issue with large arrays
+  /**
+   * Evaluate the scores of the model
+   *
+   * @param scores the scores to evaluate
+   * @return score metric value
+   */
+  override def evaluate(scores: Map[Long, Double]): Double = {
+    val scoresAndLabelAndWeight = labelAndOffsetAndWeights.map { case (id, (label, offset, weight)) =>
+      val score = scores.getOrElse(id, defaultScore) + offset
+      (score, label, weight)
+    }.toArray
+
+    // directly calling scoresAndLabelAndWeight.sort in Scala would cause some performance issue with large arrays
     val comparator = new JComparator[(Double, Double, Double)]() {
       override def compare(tuple1: (Double, Double, Double), tuple2: (Double, Double, Double)): Int = {
         JDouble.compare(tuple1._1, tuple2._1)
       }
     }
-    JArrays.sort(scoreLabelAndWeights, comparator.reversed())
+    JArrays.sort(scoresAndLabelAndWeight, comparator.reversed())
 
     var rawAUC = 0.0
     var totalPositiveCount = 0.0
     var totalNegativeCount = 0.0
     var currentPositiveCount = 0.0
     var currentNegativeCount = 0.0
-    var previousScore = scoreLabelAndWeights.head._1
+    var previousScore = scoresAndLabelAndWeight.head._1
 
-    scoreLabelAndWeights.foreach { case (score, label, weight) =>
+    scoresAndLabelAndWeight.foreach { case (score, label, weight) =>
       if (score != previousScore) {
         rawAUC += totalPositiveCount * currentNegativeCount + currentPositiveCount * currentNegativeCount / 2.0
         totalPositiveCount += currentPositiveCount

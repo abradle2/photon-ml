@@ -18,18 +18,16 @@ import breeze.linalg.Vector
 
 /**
  * Similar to [[http://www.scalanlp.org/api/breeze/index.html#breeze.optimize.FirstOrderMinimizer\$State breeze.
- *   optimize.FirstOrderMinimizer.State]]
- *
- * This class tracks the information about the optimizer, including the coefficients, objective function value +
+ *   optimize.FirstOrderMinimizer.State]],
+ * this class tracks the information about the optimizer, including the coefficients, the objective function's value and
  * gradient, and the current iteration number.
- *
  * @param coefficients The current coefficients being optimized
  * @param value The current objective function's value
  * @param gradient The current objective function's gradient
- * @param iter The current iteration number
+ * @param iter what iteration number we are on
  */
 protected[optimization] case class OptimizerState(
-    coefficients: Vector[Double],
-    value: Double,
-    gradient: Vector[Double],
-    iter: Int)
+  coefficients: Vector[Double],
+  value: Double,
+  gradient: Vector[Double],
+  iter: Int)

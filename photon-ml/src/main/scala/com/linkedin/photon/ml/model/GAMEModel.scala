@@ -14,37 +14,38 @@
  */
 package com.linkedin.photon.ml.model
 
-import com.linkedin.photon.ml.data.{GameDatum, KeyValueScore}
-import com.linkedin.photon.ml.{BroadcastLike, RDDLike}
+import scala.collection.Map
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 
-import scala.collection.Map
+import com.linkedin.photon.ml.{BroadcastLike, RDDLike}
+import com.linkedin.photon.ml.data.{KeyValueScore, GameDatum}
 
 /**
  * Representation of the generalized additive mixed effect (GAME) model
  *
- * @param gameModels A (modelName -> model) map representation of the models that consist of the GAME model
+ * @param gameModels a (modelName -> model) map representation of the models that consist of the GAME model
  */
-class GAMEModel(gameModels: Map[String, DatumScoringModel]) extends DatumScoringModel {
+class GAMEModel(gameModels: Map[String, Model]) extends Model {
 
   /**
    * Get the model by name
-   *
-   * @param name The model name
-   * @return An option value containing the value associated with model name `name` in the GAME model, or `None`
+   * @param name model name
+   * @return an option value containing the value associated with model name `name` in the GAME model, or `None`
    *         if none exists.
    */
-  def getModel(name: String): Option[DatumScoringModel] = gameModels.get(name)
+  def getModel(name: String): Option[Model] = {
+    gameModels.get(name)
+  }
 
   /**
    * Creates a updated GAME model obtained by updating it's model with name `name`
-   *
-   * @param name The name of the model to be updated
-   * @param model The model used to update the previous model
-   * @return The GAME model with updated model
+   * @param name the name of the model to be updated
+   * @param model the model used to update the previous model
+   * @return the GAME model with updated model
    */
-  def updateModel(name: String, model: DatumScoringModel): GAMEModel = {
+  def updateModel(name: String, model: Model): GAMEModel = {
     getModel(name).foreach { oldModel =>
       if (!oldModel.getClass.equals(model.getClass)) {
         throw new UnsupportedOperationException(s"Update model of class ${oldModel.getClass} " +
@@ -56,16 +57,16 @@ class GAMEModel(gameModels: Map[String, DatumScoringModel]) extends DatumScoring
 
   /**
    * Convert the GAME model into a (modelName -> model) map representation
-   *
-   * @return The (modelName -> model) map representation of the models
+   * @return the (modelName -> model) map representation of the models
    */
-  protected[ml] def toMap: Map[String, DatumScoringModel] = gameModels
+  protected[ml] def toMap: Map[String, Model] = {
+    gameModels
+  }
 
   /**
    * Persist each model with the specified storage level if it's a RDD
-   *
-   * @param storageLevel The storage level
-   * @return Myself with all RDD like models persisted
+   * @param storageLevel the storage level
+   * @return self with all RDD like models persisted
    */
   def persist(storageLevel: StorageLevel): this.type = {
     gameModels.values.foreach {
@@ -75,11 +76,6 @@ class GAMEModel(gameModels: Map[String, DatumScoringModel]) extends DatumScoring
     this
   }
 
-  /**
-   * Unpersist each model if it's a RDD
-   *
-   * @return Myself with all RDD like models unpersisted
-   */
   def unpersist: this.type = {
     gameModels.values.foreach {
       case rddLike: RDDLike => rddLike.unpersistRDD()
@@ -106,7 +102,6 @@ class GAMEModel(gameModels: Map[String, DatumScoringModel]) extends DatumScoring
     }
   }
 
-  // TODO: Violation of the hashCode() contract
   override def hashCode(): Int = {
     super.hashCode()
   }

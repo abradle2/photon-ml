@@ -65,12 +65,7 @@ class PalDBIndexMap extends IndexMap {
     *                it will directly read from local files
     * @return
     */
-  def load(
-      storePath: String,
-      partitionsNum: Int,
-      namespace: String = IndexMap.GLOBAL_NS,
-      isLocal: Boolean = false): PalDBIndexMap = {
-
+  def load(storePath: String, partitionsNum: Int, isLocal: Boolean = false): PalDBIndexMap = {
     _storeReaders = new Array[StoreReader](partitionsNum)
     _offsets = new Array[Int](partitionsNum)
 
@@ -80,7 +75,7 @@ class PalDBIndexMap extends IndexMap {
     for (i <- 0 until partitionsNum) {
       // Note: because we store both name -> idx and idx -> name in the same store
       _offsets(i) = _size / 2
-      val filename = partitionFilename(i, namespace)
+      val filename = partitionFilename(i)
 
       val storeFile = if (isLocal) {
         new JFile(storePath, filename)
@@ -173,8 +168,7 @@ object PalDBIndexMap {
     * @param partitionId the partition Id
     * @return the formatted filename
     */
-  def partitionFilename(partitionId: Int, namespace: String = IndexMap.GLOBAL_NS): String =
-    s"paldb-partition-${namespace}-${partitionId}.dat"
+  def partitionFilename(partitionId: Int): String = s"paldb-partition-${partitionId}.dat"
 
   class PalDBIndexMapIterator(private val indexMap: PalDBIndexMap) extends Iterator[(String, Int)] {
     private var _iter: Iterator[JMap.Entry[Any, Any]] = null

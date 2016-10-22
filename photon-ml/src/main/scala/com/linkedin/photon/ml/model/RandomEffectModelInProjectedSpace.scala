@@ -14,63 +14,61 @@
  */
 package com.linkedin.photon.ml.model
 
-import com.linkedin.photon.ml.projector.RandomEffectProjector
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+
+import com.linkedin.photon.ml.projector.RandomEffectProjector
 
 /**
  * Representation of a random effect model in projected space
  *
- * @param modelsInProjectedSpaceRDD The underlying models with coefficients in projected space
- * @param randomEffectProjector The projector between the original and projected spaces
- * @param randomEffectType The random effect type
- * @param featureShardId The feature shard id
+ * @param coefficientsRDDInProjectedSpace the coefficients in projected space
+ * @param randomEffectProjector random effect projector
+ * @param randomEffectId the random effect type id
+ * @param featureShardId the feature shard id
+ * @author xazhang
  */
 protected[ml] class RandomEffectModelInProjectedSpace(
-    val modelsInProjectedSpaceRDD: RDD[(String, GeneralizedLinearModel)],
+    val coefficientsRDDInProjectedSpace: RDD[(String, Coefficients)],
     val randomEffectProjector: RandomEffectProjector,
-    override val randomEffectType: String,
+    override val randomEffectId: String,
     override val featureShardId: String)
-  extends RandomEffectModel(
-    randomEffectProjector.projectCoefficientsRDD(modelsInProjectedSpaceRDD),
-    randomEffectType,
-    featureShardId) {
+    extends RandomEffectModel(randomEffectProjector.projectCoefficientsRDD(coefficientsRDDInProjectedSpace),
+      randomEffectId, featureShardId) {
 
   override def persistRDD(storageLevel: StorageLevel): this.type = {
-    if (!modelsInProjectedSpaceRDD.getStorageLevel.isValid) modelsInProjectedSpaceRDD.persist(storageLevel)
+    if (!coefficientsRDDInProjectedSpace.getStorageLevel.isValid) coefficientsRDDInProjectedSpace.persist(storageLevel)
     this
   }
 
   override def unpersistRDD(): this.type = {
-    if (modelsInProjectedSpaceRDD.getStorageLevel.isValid) modelsInProjectedSpaceRDD.unpersist()
+    if (coefficientsRDDInProjectedSpace.getStorageLevel.isValid) coefficientsRDDInProjectedSpace.unpersist()
     this
   }
 
   override def setName(name: String): this.type = {
-    modelsInProjectedSpaceRDD.setName(name)
+    coefficientsRDDInProjectedSpace.setName(name)
     this
   }
 
   override def materialize(): this.type = {
-    modelsInProjectedSpaceRDD.count()
+    coefficientsRDDInProjectedSpace.count()
     this
   }
 
   /**
    * Build a summary string for the model
    *
-   * @return String representation
+   * @return string representation
    */
   override def toSummaryString: String = {
-    val stringBuilder = new StringBuilder(s"Random effect model with projector with " +
-      s"randomEffectType $randomEffectType, featureShardId $featureShardId summary:")
+    val stringBuilder = new StringBuilder(s"Random effect model with projector with randomEffectId $randomEffectId, " +
+        s"featureShardId $featureShardId summary:")
     stringBuilder.append("\ncoefficientsRDDInProjectedSpace:")
-    stringBuilder.append(s"\nLength: ${modelsInProjectedSpaceRDD.values.map(_.coefficients.means.length).stats()}")
-    stringBuilder.append(s"\nMean: ${modelsInProjectedSpaceRDD.values.map(_.coefficients.meansL2Norm).stats()}")
-    if (modelsInProjectedSpaceRDD.first()._2.coefficients.variancesOption.isDefined) {
-      stringBuilder.append(
-        s"\nVar: ${modelsInProjectedSpaceRDD.values.map(_.coefficients.variancesL2NormOption.get).stats()}")
+    stringBuilder.append(s"\nLength: ${coefficientsRDDInProjectedSpace.values.map(_.means.length).stats()}")
+    stringBuilder.append(s"\nMean: ${coefficientsRDDInProjectedSpace.map(_._2.meansL2Norm).stats()}")
+    if (coefficientsRDDInProjectedSpace.first()._2.variancesOption.isDefined) {
+      stringBuilder.append(s"\nVar: ${coefficientsRDDInProjectedSpace.map(_._2.variancesL2NormOption.get).stats()}")
     }
     stringBuilder.toString()
   }
@@ -78,22 +76,22 @@ protected[ml] class RandomEffectModelInProjectedSpace(
   /**
    * Convert the projected space model into a random effect model
    *
-   * @return The random effect model
+   * @return the random effect model
    */
-  def toRandomEffectModel: RandomEffectModel =
-    new RandomEffectModel(modelsInProjectedSpaceRDD, randomEffectType, featureShardId)
+  def toRandomEffectModel: RandomEffectModel = {
+    new RandomEffectModel(coefficientsRDDInProjectedSpace, randomEffectId, featureShardId)
+  }
 
   /**
-   * Update the random effect model in projected space with new underlying models per individual
+   * Update the random effect model in projected space
    *
-   * @param updatedModelsRDDInProjectedSpace The new models with coefficients in projected space
-   * @return The updated random effect model in projected space
+   * @param updatedCoefficientsRDDInProjectedSpace the coefficients in projected space
+   * @return the updated model
    */
-  def updateRandomEffectModelInProjectedSpace(updatedModelsRDDInProjectedSpace: RDD[(String, GeneralizedLinearModel)])
-    : RandomEffectModelInProjectedSpace =
-    new RandomEffectModelInProjectedSpace(
-      updatedModelsRDDInProjectedSpace,
-      randomEffectProjector,
-      randomEffectType,
+  def updateRandomEffectModelInProjectedSpace(
+      updatedCoefficientsRDDInProjectedSpace: RDD[(String, Coefficients)]): RandomEffectModelInProjectedSpace = {
+
+    new RandomEffectModelInProjectedSpace(updatedCoefficientsRDDInProjectedSpace, randomEffectProjector, randomEffectId,
       featureShardId)
+  }
 }

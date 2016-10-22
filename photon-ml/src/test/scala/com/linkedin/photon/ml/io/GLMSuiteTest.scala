@@ -23,6 +23,9 @@ import org.testng.annotations.{DataProvider, Test}
  * This class tests some basic util methods in GLMSuite.
  *
  * Tests that requires a SparkContext are put in [[GLMSuiteIntegTest]]
+ *
+ * @author yizhou
+ * @author nkatariy
  */
 class GLMSuiteTest {
   @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))

@@ -15,37 +15,41 @@
 package com.linkedin.photon.ml
 
 import breeze.linalg.{DenseMatrix, DenseVector, Matrix, SparseVector, Vector}
+import scala.collection.mutable.BitSet
+
 import com.linkedin.photon.ml.avro.data.NameAndTerm
 import com.linkedin.photon.ml.data.{GameDatum, KeyValueScore, LabeledPoint, LocalDataSet}
-import com.linkedin.photon.ml.function._
+import com.linkedin.photon.ml.function.{
+  LogisticLossFunction, SquaredLossFunction, GeneralizedLinearModelLossFunction, HessianVectorAggregator,
+  ValueAndGradientAggregator}
 import com.linkedin.photon.ml.model.Coefficients
 import com.linkedin.photon.ml.normalization.NormalizationContext
-import com.linkedin.photon.ml.optimization.game.{GLMOptimizationConfiguration, MFOptimizationConfiguration}
-import com.linkedin.photon.ml.optimization.{GeneralizedLinearOptimizationProblem, LBFGS, RegularizationContext, TRON}
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
+import com.linkedin.photon.ml.optimization.{LBFGS, TRON}
+import com.linkedin.photon.ml.optimization.game.{
+  GLMOptimizationConfiguration, MFOptimizationConfiguration, OptimizationProblem}
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.serializer.KryoSerializer
 import org.apache.spark.{SparkConf, SparkContext}
-
-import scala.collection.mutable
 
 /**
  * Factory for creating SparkContext instances. This handles the tricky details of things like setting up serialization,
  * resource negotiation, logging, etc.
+ *
+ * @author xazhang
+ * @author yizhou
  */
 object SparkContextConfiguration {
   val CONF_SPARK_APP_NAME = "spark.app.name"
   val CONF_SPARK_SERIALIZER = "spark.serializer"
   val CONF_SPARK_KRYO_CLASSES_TO_REGISTER = "spark.kryo.classesToRegister"
   val KRYO_CLASSES_TO_REGISTER = Array[Class[_]](
-    classOf[mutable.BitSet],
+    classOf[BitSet],
     classOf[Coefficients],
     classOf[DenseMatrix[Double]],
     classOf[DenseVector[Double]],
     classOf[GLMOptimizationConfiguration],
     classOf[GameDatum],
-    classOf[GeneralizedLinearModel],
     classOf[GeneralizedLinearModelLossFunction],
-    classOf[GeneralizedLinearOptimizationProblem[_, _]],
     classOf[HessianVectorAggregator],
     classOf[KeyValueScore],
     classOf[LBFGS[LabeledPoint]],
@@ -56,7 +60,7 @@ object SparkContextConfiguration {
     classOf[Matrix[Double]],
     classOf[NameAndTerm],
     classOf[NormalizationContext],
-    classOf[RegularizationContext],
+    classOf[OptimizationProblem[_]],
     classOf[Set[Int]],
     classOf[SparseVector[Double]],
     classOf[SquaredLossFunction],

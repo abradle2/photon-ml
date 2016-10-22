@@ -14,104 +14,103 @@
  */
 package com.linkedin.photon.ml.algorithm
 
-import com.linkedin.photon.ml.data.{KeyValueScore, LabeledPoint, RandomEffectDataSet, RandomEffectDataSetInProjectedSpace}
-import com.linkedin.photon.ml.function.DiffFunction
-import com.linkedin.photon.ml.model.{Coefficients, DatumScoringModel, RandomEffectModel, RandomEffectModelInProjectedSpace}
+
+import com.linkedin.photon.ml.data.{
+  KeyValueScore, RandomEffectDataSet, LabeledPoint, RandomEffectDataSetInProjectedSpace}
+import com.linkedin.photon.ml.function.TwiceDiffFunction
+import com.linkedin.photon.ml.model.{RandomEffectModelInProjectedSpace, Coefficients, RandomEffectModel, Model}
 import com.linkedin.photon.ml.optimization.game.{OptimizationTracker, RandomEffectOptimizationProblem}
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
+
 
 /**
  * The optimization problem coordinate for a random effect model in projected space
  *
- * @param randomEffectDataSetInProjectedSpace The training dataset
- * @param randomEffectOptimizationProblem The fixed effect optimization problem
+ * @param randomEffectDataSetInProjectedSpace the training dataset
+ * @param randomEffectOptimizationProblem the fixed effect optimization problem
+ * @author xazhang
  */
-protected[ml] class RandomEffectCoordinateInProjectedSpace[GLM <: GeneralizedLinearModel,
-  F <: DiffFunction[LabeledPoint]](
+protected[ml] class RandomEffectCoordinateInProjectedSpace[F <: TwiceDiffFunction[LabeledPoint]](
     randomEffectDataSetInProjectedSpace: RandomEffectDataSetInProjectedSpace,
-    randomEffectOptimizationProblem: RandomEffectOptimizationProblem[GLM, F])
-  extends RandomEffectCoordinate[GLM, F](randomEffectDataSetInProjectedSpace, randomEffectOptimizationProblem) {
+    randomEffectOptimizationProblem: RandomEffectOptimizationProblem[F])
+  extends RandomEffectCoordinate[F, RandomEffectCoordinateInProjectedSpace[F]](
+    randomEffectDataSetInProjectedSpace, randomEffectOptimizationProblem) {
 
   /**
    * Initialize the model
    *
-   * @param seed Random seed
+   * @param seed random seed
    */
-  protected[algorithm] override def initializeModel(seed: Long): RandomEffectModelInProjectedSpace = {
-    RandomEffectCoordinateInProjectedSpace.initializeModel(
-      randomEffectDataSetInProjectedSpace,
-      randomEffectOptimizationProblem)
+  protected[algorithm] override def initializeModel(seed: Long): Model = {
+    RandomEffectCoordinateInProjectedSpace.initializeZeroModel(randomEffectDataSetInProjectedSpace)
   }
 
   /**
    * Update the model (i.e. run the coordinate optimizer)
    *
-   * @param model The model
-   * @return Tuple of updated model and optimization tracker
+   * @param model the model
+   * @return tuple of updated model and optimization tracker
    */
-  protected[algorithm] override def updateModel(model: DatumScoringModel): (DatumScoringModel, OptimizationTracker) =
+  protected[algorithm] override def updateModel(model: Model): (Model, OptimizationTracker) = {
     model match {
       case randomEffectModelWithProjector: RandomEffectModelInProjectedSpace =>
         val randomEffectModel = randomEffectModelWithProjector.toRandomEffectModel
         val (updatedModel, optimizationTracker) = super.updateModel(randomEffectModel)
-        val updatedModelsRDD = updatedModel.asInstanceOf[RandomEffectModel].modelsRDD
-        val updatedRandomEffectModelWithProjector = randomEffectModelWithProjector
-          .updateRandomEffectModelInProjectedSpace(updatedModelsRDD)
-
+        val updatedCoefficientsRDD = updatedModel.asInstanceOf[RandomEffectModel].coefficientsRDD
+        val updatedRandomEffectModelWithProjector =
+          randomEffectModelWithProjector.updateRandomEffectModelInProjectedSpace(updatedCoefficientsRDD)
         (updatedRandomEffectModelWithProjector, optimizationTracker)
-
       case _ =>
         throw new UnsupportedOperationException(s"Updating model of type ${model.getClass} in ${this.getClass} is " +
             s"not supported!")
     }
+  }
 
   /**
    * Score the model
    *
-   * @param model The model to score
-   * @return Scores
+   * @param model the model to score
+   * @return scores
    */
-  protected[algorithm] override def score(model: DatumScoringModel): KeyValueScore = model match {
-    case randomEffectModelWithProjector: RandomEffectModelInProjectedSpace =>
-      val randomEffectModel = randomEffectModelWithProjector.toRandomEffectModel
-      super.score(randomEffectModel)
-
-    case _ =>
-      throw new UnsupportedOperationException(s"Updating scores with model of type ${model.getClass} " +
-        s"in ${this.getClass} is not supported!")
+  protected[algorithm] override def score(model: Model): KeyValueScore = {
+    model match {
+      case randomEffectModelWithProjector: RandomEffectModelInProjectedSpace =>
+        val randomEffectModel = randomEffectModelWithProjector.toRandomEffectModel
+        super.score(randomEffectModel)
+      case _ =>
+        throw new UnsupportedOperationException(s"Updating scores with model of type ${model.getClass} " +
+            s"in ${this.getClass} is not supported!")
+    }
   }
 
   /**
    * Compute the regularization term value
    *
-   * @param model The model
-   * @return Regularization term value
+   * @param model the model
+   * @return regularization term value
    */
-  protected[algorithm] override def computeRegularizationTermValue(model: DatumScoringModel): Double = model match {
-    case randomEffectModelWithProjector: RandomEffectModelInProjectedSpace =>
-      val randomEffectModel = randomEffectModelWithProjector.toRandomEffectModel
-      super.computeRegularizationTermValue(randomEffectModel)
-
-    case _ =>
-      throw new UnsupportedOperationException(s"Compute the regularization term value with model of " +
-        s"type ${model.getClass} in ${this.getClass} is not supported!")
+  protected[algorithm] override def computeRegularizationTermValue(model: Model): Double = {
+    model match {
+      case randomEffectModelWithProjector: RandomEffectModelInProjectedSpace =>
+        val randomEffectModel = randomEffectModelWithProjector.toRandomEffectModel
+        super.computeRegularizationTermValue(randomEffectModel)
+      case _ =>
+        throw new UnsupportedOperationException(s"Compute the regularization term value with model of " +
+            s"type ${model.getClass} in ${this.getClass} is not supported!")
+    }
   }
 
   /**
    * Update the coordinate with a dataset
    *
-   * @param updatedRandomEffectDataSet The updated dataset
-   * @return The updated coordinate
+   * @param updatedRandomEffectDataSet the updated dataset
+   * @return the updated coordinate
    */
-  override protected def updateCoordinateWithDataSet(updatedRandomEffectDataSet: RandomEffectDataSet)
-    : RandomEffectCoordinate[GLM, F] = {
+  override protected def updateRandomEffectCoordinateWithDataSet(
+      updatedRandomEffectDataSet: RandomEffectDataSet) : RandomEffectCoordinateInProjectedSpace[F] = {
 
-    val updatedRandomEffectDataSetInProjectedSpace = new RandomEffectDataSetInProjectedSpace(
-      updatedRandomEffectDataSet,
+    val updatedRandomEffectDataSetInProjectedSpace = new RandomEffectDataSetInProjectedSpace(updatedRandomEffectDataSet,
       randomEffectDataSetInProjectedSpace.randomEffectProjector)
-
-    new RandomEffectCoordinateInProjectedSpace(
-      updatedRandomEffectDataSetInProjectedSpace,
+    new RandomEffectCoordinateInProjectedSpace(updatedRandomEffectDataSetInProjectedSpace,
       randomEffectOptimizationProblem)
   }
 }
@@ -121,25 +120,17 @@ object RandomEffectCoordinateInProjectedSpace {
   /**
    * Initialize a zero model
    *
-   * @param randomEffectDataSetInProjectedSpace The dataset
+   * @param randomEffectDataSetInProjectedSpace the dataset
    */
-  private def initializeModel[GLM <: GeneralizedLinearModel, F <: DiffFunction[LabeledPoint]](
-      randomEffectDataSetInProjectedSpace: RandomEffectDataSetInProjectedSpace,
-      randomEffectOptimizationProblem: RandomEffectOptimizationProblem[GLM, F]): RandomEffectModelInProjectedSpace = {
+  private def initializeZeroModel(
+      randomEffectDataSetInProjectedSpace: RandomEffectDataSetInProjectedSpace) : RandomEffectModelInProjectedSpace = {
 
-    val glm = randomEffectOptimizationProblem.initializeModel(0)
-    val randomEffectModelsRDD = randomEffectDataSetInProjectedSpace.activeData.mapValues { localDataSet =>
-      glm.updateCoefficients(Coefficients.initializeZeroCoefficients(localDataSet.numFeatures))
-        .asInstanceOf[GeneralizedLinearModel]
-    }
-    val randomEffectType = randomEffectDataSetInProjectedSpace.randomEffectType
+    val randomEffectModel = randomEffectDataSetInProjectedSpace.activeData.mapValues(localDataSet =>
+      Coefficients.initializeZeroCoefficients(localDataSet.numFeatures)
+    )
+    val randomEffectId = randomEffectDataSetInProjectedSpace.randomEffectId
     val featureShardId = randomEffectDataSetInProjectedSpace.featureShardId
     val randomEffectProjector = randomEffectDataSetInProjectedSpace.randomEffectProjector
-
-    new RandomEffectModelInProjectedSpace(
-      randomEffectModelsRDD,
-      randomEffectProjector,
-      randomEffectType,
-      featureShardId)
+    new RandomEffectModelInProjectedSpace(randomEffectModel, randomEffectProjector, randomEffectId, featureShardId)
   }
 }

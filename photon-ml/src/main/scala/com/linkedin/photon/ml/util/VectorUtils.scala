@@ -16,13 +16,13 @@ package com.linkedin.photon.ml.util
 
 
 import breeze.linalg.{DenseVector, SparseVector, Vector}
-import org.apache.spark.mllib.linalg.{DenseVector => SDV, SparseVector => SSV, Vector => SparkVector}
 
 import scala.collection.mutable
 
 
 /**
  * A utility object that contains some operations on [[Vector]].
+ * @author xazhang
  */
 object VectorUtils {
 
@@ -93,7 +93,7 @@ object VectorUtils {
   }
 
   /**
-   * The Kronecker product between two vectors: vector1 and vector2
+   * The Kronecker product between two vectors: vector1 \otimes vector2
    * Wiki reference on the Kronecker product: [[https://en.wikipedia.org/wiki/Kronecker_product]]
    * @param vector1 The left vector
    * @param vector2 The right vector
@@ -122,51 +122,4 @@ object VectorUtils {
     }
     new SparseVector[Double](index.toArray, data.toArray, length)
   }
-
-  /**
-    * Converts a Breeze vector to an mllib vector
-    *
-    * @param breezeVector the Breeze vector
-    * @return the mllib vector
-    * @note lifted from spark private api
-    */
-  def breezeToMllib(breezeVector: Vector[Double]): SparkVector = {
-    breezeVector match {
-      case v: DenseVector[Double] =>
-        if (v.offset == 0 && v.stride == 1 && v.length == v.data.length) {
-          new SDV(v.data)
-        } else {
-          new SDV(v.toArray)  // Can't use underlying array directly, so make a new one
-        }
-
-      case v: SparseVector[Double] =>
-        if (v.index.length == v.used) {
-          new SSV(v.length, v.index, v.data)
-        } else {
-          new SSV(v.length, v.index.slice(0, v.used), v.data.slice(0, v.used))
-        }
-
-      case v: Vector[_] =>
-        throw new IllegalArgumentException("Unsupported Breeze vector type: " + v.getClass.getName)
-    }
-  }
-
-  /**
-    * Converts a mllib vector to a Breeze vector
-    *
-    * @param mllibVector the mllib vector
-    * @return the Breeze vector
-    * @note lifted from spark private api
-    */
-  def mllibToBreeze(mllibVector: SparkVector): Vector[Double] =
-    mllibVector match {
-      case v: SSV =>
-        new SparseVector[Double](v.indices, v.values, v.size)
-
-      case v: SDV =>
-        new DenseVector[Double](v.values)
-
-      case v =>
-        throw new IllegalArgumentException("Unsupported mllib vector type: " + v.getClass.getName)
-    }
 }

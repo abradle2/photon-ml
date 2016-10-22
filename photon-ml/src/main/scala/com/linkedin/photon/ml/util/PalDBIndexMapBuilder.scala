@@ -25,6 +25,8 @@ import org.apache.hadoop.fs.{Path, FileSystem}
 
 /**
   * A IndexMapBuilder implemented via PalDB: [[https://github.com/linkedin/paldb]]
+  *
+  * @author yizhou
   */
 class PalDBIndexMapBuilder extends IndexMapBuilder with Serializable {
   @transient
@@ -33,8 +35,8 @@ class PalDBIndexMapBuilder extends IndexMapBuilder with Serializable {
   private var _tmpFile: java.io.File = null
   private var _dstFilePath: Path = null
 
-  override def init(outputDir: String, partitionId: Int, namespace: String): IndexMapBuilder = {
-    val filename = PalDBIndexMap.partitionFilename(partitionId, namespace)
+  override def init(outputDir: String, partitionId: Int): IndexMapBuilder = {
+    val filename = PalDBIndexMap.partitionFilename(partitionId)
     _tmpFile = new java.io.File(FileUtils.getTempDirectory, s"paldb-temp-${UUID.randomUUID().toString()}")
     _storeWriter = PalDB.createWriter(_tmpFile)
     _dstFilePath = new Path(outputDir, filename)
