@@ -22,6 +22,8 @@ import com.linkedin.photon.ml.function.DiffFunction
 
 /**
  * Common book-keeping for the states of implementing [[Optimizer]] and its convergence check
+ *
+ * @author bdrew
  */
 abstract class AbstractOptimizer[Datum <: DataPoint, -Function <: DiffFunction[Datum]](
     protected var tolerance: Double = 1e-6,

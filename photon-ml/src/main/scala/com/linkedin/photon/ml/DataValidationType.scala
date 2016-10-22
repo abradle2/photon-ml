@@ -16,6 +16,7 @@ package com.linkedin.photon.ml
 
 /**
  * Control the level of validation that is performed
+ * @author bdrew
  */
 object DataValidationType extends Enumeration {
   type DataValidationType = Value

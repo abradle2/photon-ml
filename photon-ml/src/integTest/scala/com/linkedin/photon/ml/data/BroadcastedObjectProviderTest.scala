@@ -24,6 +24,8 @@ import org.testng.annotations.{DataProvider, Test}
 
 /**
  * Test BroadcastObjectProvider
+ *
+ * @author dpeng
  */
 class BroadcastedObjectProviderTest extends SparkTestUtils {
   @Test(dataProvider = "dataProvider")

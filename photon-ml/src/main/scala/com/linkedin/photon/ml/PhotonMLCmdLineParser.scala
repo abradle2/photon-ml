@@ -16,7 +16,7 @@ package com.linkedin.photon.ml
 
 import com.linkedin.photon.ml.OptionNames._
 import com.linkedin.photon.ml.diagnostics.DiagnosticMode
-import com.linkedin.photon.ml.io.{ConstraintMapKeys, FieldNamesType, InputFormatType}
+import com.linkedin.photon.ml.io.{ConstraintMapKeys, FieldNamesType}
 import com.linkedin.photon.ml.normalization.NormalizationType
 import com.linkedin.photon.ml.optimization.{OptimizerType, RegularizationType}
 import com.linkedin.photon.ml.supervised.TaskType
@@ -27,6 +27,10 @@ import scala.util.parsing.json.JSON
 
 /**
  * A collection of functions used to parse Photon-ML's parameters [[Params]]
+ *
+ * @author xazhang
+ * @author dpeng
+ * @author nkatariy
  */
 object PhotonMLCmdLineParser {
 
@@ -89,18 +93,17 @@ object PhotonMLCmdLineParser {
                       s"1. Validation is optional\n" +
                       s"2. If validation data set is provided, then model validating will be performed and " +
                         s"best model will be provided\n" +
-                      s"3. No matter 1 or 2, all learned models will be provided, so users can always perform " +
+                      s"3. No matter 1 or 2, all learned models will be provided, so users can always peform " +
                         s"an independent model selection job")
               .foreach(x => params.validateDirOpt = Some(x))
       opt[Boolean](INTERCEPT_OPTION)
               .text(s"Whether to learn the intercept. Default ${defaultParams.addIntercept}.")
               .foreach(x => params.addIntercept = x)
       opt[String](REGULARIZATION_WEIGHTS_OPTION)
-              .text(s"Comma separated list of distinct regularization weights. The regularization weight will be " +
-                      s"ignored if " +
+              .text(s"Comma separated list of regularization weights. The regularization weight will be ignored if " +
                       s"$REGULARIZATION_TYPE_OPTION is set ${RegularizationType.NONE}. " +
                       s"Default ${defaultParams.regularizationWeights.mkString(",")}.")
-              .foreach(x => params.regularizationWeights = x.split(",").map(_.toDouble).toList.distinct)
+              .foreach(x => params.regularizationWeights = x.split(",").map(_.toDouble).toList)
       opt[String](REGULARIZATION_TYPE_OPTION)
               .text(s"The type of regularization that will be used to train the model. Options: " +
                       s"[${RegularizationType.values.mkString("|")}}]. If ${RegularizationType.NONE} is used, " +
@@ -212,21 +215,15 @@ object PhotonMLCmdLineParser {
         .text("The offheap storage directory if offheap map is needed. DefaultIndexMap will be used if not specified.")
         .foreach(x => params.offHeapIndexMapDir = Some(x))
       opt[Int](OFFHEAP_INDEXMAP_NUM_PARTITIONS)
-        .text("The number of partitions for the offheap map storage. This partition number should be consistent with " +
-            "the number when offheap storage is built. This parameter affects only the execution speed during " +
-            "feature index building and has zero performance impact on training other than maintaining a " +
+        .text("The number of partitions for the offheap map storage. Such partition number should be consistent with " +
+            "the number when offheap storage is built. This is a parameter only affecting the execution speed at " +
+            "feature index building stage and has zero performance impact in training other than maintaining a " +
             "convention.")
         .foreach(x => params.offHeapIndexMapNumPartitions = x)
       opt[Boolean](DELETE_OUTPUT_DIRS_IF_EXIST)
         .text(s"Delete the output directories (including the model and summarization output directories) if exist." +
             s"Default: ${defaultParams.deleteOutputDirsIfExist}")
         .foreach(x => params.deleteOutputDirsIfExist = x)
-      opt[String](INPUT_FILE_FORMAT)
-        .text("Indicating the input data format for PhotonML")
-        .foreach(x => params.inputFormatType = InputFormatType.withName(x.toUpperCase()))
-      opt[Int](FEATURE_DIMENSION)
-        .text("A preliminary indicator of how many features the input data contains (just an upper bound, not including intercept). Only used by LIBSVM format and is to be removed soon.")
-        .foreach(x => params.featureDimension = x)
       help(HELP_OPTION).text("prints Photon-ML's usage text")
       override def showUsageOnError = true
     }

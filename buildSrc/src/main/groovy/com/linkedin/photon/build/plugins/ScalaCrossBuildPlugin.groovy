@@ -21,6 +21,8 @@ import static ScalaUtils.getScalaVersionSuffix
 /**
  * This plugin provides Scala cross-build capability, it creates multiple projects with different scala version suffixes
  * that share the same module directory.
+ *
+ * @author cfreeman
  */
 class ScalaCrossBuildPlugin implements Plugin<Settings> {
 

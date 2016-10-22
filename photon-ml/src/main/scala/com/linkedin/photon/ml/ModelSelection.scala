@@ -24,6 +24,9 @@ import org.apache.spark.rdd.RDD
 
 /**
  * A collection of functions for model selection purpose
+ * @author xazhang
+ * @author dpeng
+ * @author bdrew
  */
 object ModelSelection extends Logging {
 

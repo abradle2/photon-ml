@@ -20,12 +20,12 @@ import FieldNamesType.FieldNamesType
 import com.linkedin.photon.avro.generated.{FeatureSummarizationResultAvro, TrainingExampleAvro}
 import com.linkedin.photon.ml.data.LabeledPoint
 import com.linkedin.photon.ml.stat.BasicStatisticalSummary
-import com.linkedin.photon.ml.test.{SparkTestUtils, TestTemplateWithTmpDir}
-import com.linkedin.photon.ml.util.{DefaultIndexMap, IOUtils, Utils}
+import com.linkedin.photon.ml.test.{TestTemplateWithTmpDir, SparkTestUtils}
+import com.linkedin.photon.ml.util.{DefaultIndexMap, Utils}
 import com.linkedin.photon.ml.util.VectorUtils.convertIndexAndValuePairArrayToSparseVector
 import org.apache.avro.Schema
 import org.apache.avro.file.{DataFileReader, DataFileWriter}
-import org.apache.avro.generic.{GenericDatumWriter, GenericRecord, GenericRecordBuilder}
+import org.apache.avro.generic.{GenericRecordBuilder, GenericDatumWriter, GenericRecord}
 import org.apache.avro.specific.SpecificDatumReader
 import org.apache.spark.SparkException
 import org.apache.spark.rdd.RDD
@@ -40,6 +40,9 @@ import org.testng.Assert._
 /**
  * This class tests components of GLMSuite that requires integration with real RDD or other runtime environments.
  * Also see [[GLMSuiteTest]].
+ *
+ * @author yizhou
+ * @author nkatariy
  */
 class GLMSuiteIntegTest extends SparkTestUtils with TestTemplateWithTmpDir {
   import GLMSuiteIntegTest._
@@ -388,7 +391,6 @@ class GLMSuiteIntegTest extends SparkTestUtils with TestTemplateWithTmpDir {
     }
   }
 
-  // TODO: this integTest should be relocated to integTests for IOUtils
   @Test
   def testWriteBasicStatistics(): Unit = sparkTest("testWriteBasicStatistics") {
     val dim: Int = 5
@@ -427,7 +429,7 @@ class GLMSuiteIntegTest extends SparkTestUtils with TestTemplateWithTmpDir {
         "f4" + GLMSuite.DELIMITER -> 4))
 
     val tempOut = getTmpDir + "/summary-output"
-    IOUtils.writeBasicStatistics(sc, summary, tempOut, suite.featureKeyToIdMap)
+    suite.writeBasicStatistics(sc, summary, tempOut)
 
     val reader = DataFileReader.openReader[FeatureSummarizationResultAvro](new File(tempOut + "/part-00000.avro"),
         new SpecificDatumReader[FeatureSummarizationResultAvro]())

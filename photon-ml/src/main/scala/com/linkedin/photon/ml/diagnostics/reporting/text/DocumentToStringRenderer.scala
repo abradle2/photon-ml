@@ -18,7 +18,9 @@ import com.linkedin.photon.ml.diagnostics.reporting._
 import com.linkedin.photon.ml.diagnostics.reporting._
 import com.linkedin.photon.ml.diagnostics.reporting.base.BaseSequencePhysicalReportRender
 
-
+/**
+ * Created by bdrew on 10/12/15.
+ */
 class DocumentToStringRenderer(
     renderStrategy: RenderStrategy[ChapterPhysicalReport, String],
     numberingContext: NumberingContext)

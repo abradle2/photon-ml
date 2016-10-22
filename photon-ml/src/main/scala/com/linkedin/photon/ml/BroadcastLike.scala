@@ -16,6 +16,7 @@ package com.linkedin.photon.ml
 
 /**
  * A trait to hold some simple operations on the Broadcasted variables
+ * @author xazhang
  */
 protected[ml] trait BroadcastLike {
   /**

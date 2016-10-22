@@ -22,6 +22,8 @@ import org.apache.avro.generic.GenericRecord
 /**
  * This defines a common trait for an training avro record builder. Different training input formats should implement
  * the builder differently. This is supposed to be used in tests.
+ *
+ * @author yizhou
  */
 trait TrainingAvroBuilder {
   def setLabel(label: Double): TrainingAvroBuilder

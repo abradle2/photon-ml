@@ -14,15 +14,17 @@
  */
 package com.linkedin.photon.ml.evaluation
 
+import scala.collection.Map
+
 /**
  * Interface for evaluation implementations at the local level
  */
-protected[ml] trait LocalEvaluator extends Serializable {
+trait LocalEvaluator {
   /**
    * Evaluate the scores of the model
    *
-   * @param scoreLabelAndWeight an [[Iterable]] of (score, label, weight) used to for evaluation
+   * @param scores the scores to evaluate
    * @return score metric value
    */
-  protected[ml] def evaluate(scoreLabelAndWeight: Array[(Double, Double, Double)]): Double
+  def evaluate(scores: Map[Long, Double]): Double
 }

@@ -20,22 +20,23 @@ import com.linkedin.photon.ml.OptionNames._
 import com.linkedin.photon.ml.diagnostics.DiagnosticMode
 import com.linkedin.photon.ml.diagnostics.DiagnosticMode.DiagnosticMode
 import com.linkedin.photon.ml.io.FieldNamesType._
-import com.linkedin.photon.ml.io.InputFormatType
-import com.linkedin.photon.ml.io.InputFormatType.InputFormatType
 import com.linkedin.photon.ml.normalization.NormalizationType
 import com.linkedin.photon.ml.optimization.OptimizerType._
 import com.linkedin.photon.ml.optimization.{OptimizerType, RegularizationType}
 import com.linkedin.photon.ml.optimization.RegularizationType._
 import com.linkedin.photon.ml.supervised.TaskType._
-import com.linkedin.photon.ml.util.PalDBIndexMapParams
 
 import scala.collection.mutable.ArrayBuffer
 
 
 /**
  *  A bean class for PhotonML parameters to replace the original case class for input parameters.
+ *
+ * @author xazhang
+ * @author dpeng
+ * @author nkatariy
  */
-class Params extends PalDBIndexMapParams {
+class Params {
   /**
    * Training data directory
    */
@@ -149,21 +150,13 @@ class Params extends PalDBIndexMapParams {
    */
   var treeAggregateDepth: Int = 1
 
+  var offHeapIndexMapDir: Option[String] = None
+  var offHeapIndexMapNumPartitions: Int = 0
+
   /**
    * Whether to delete the output directories (including the model and summarization output directories) if exist
    */
   var deleteOutputDirsIfExist: Boolean = false
-
-  /**
-    * Input file format for training, e.g. AVRO, LIBSVM or others (if implemented).
-    */
-  var inputFormatType: InputFormatType = InputFormatType.AVRO
-
-  /**
-    * An suggestive indicator of how many features our input data is looking at. Roughly just an
-    * upper bound is okay, currently only used by the LIBSVM input format.
-    */
-  var featureDimension: Int = -1
 
   /**
    * Validate this parameters. Exception will be thrown if the parameter combination is invalid.

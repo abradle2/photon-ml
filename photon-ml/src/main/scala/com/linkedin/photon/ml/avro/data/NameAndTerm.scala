@@ -16,9 +16,10 @@ package com.linkedin.photon.ml.avro.data
 
 /**
  * A compact way to represent the feature key as (name, term) pair.
+ * @author xazhang
  */
-// TODO: Change the scope of this class and all functions in the companion object to [[com.linkedin.photon.ml.avro]]
-// after Avro related classes/functions are decoupled from the rest of code
+//TODO: Change the scope of this class and all functions in the companion object to [[com.linkedin.photon.ml.avro]]
+//after Avro related classes/functons are decoupled from the rest of code
 protected[ml] case class NameAndTerm(name: String, term: String) {
 
   override def hashCode: Int = {

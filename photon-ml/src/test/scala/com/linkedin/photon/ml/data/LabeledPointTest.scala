@@ -21,6 +21,9 @@ import org.testng.annotations.{DataProvider, Test}
 
 /**
  * Test the functions in [[LabeledPoint]]
+ *
+ * @author yali
+ * @author dpeng
  */
 class LabeledPointTest {
   val delta = 1.0E-9

@@ -24,16 +24,17 @@ import com.linkedin.photon.ml.projector.{ProjectorType, RandomEffectProjector}
  *
  * @param randomEffectDataSetInProjectedSpace input random effect dataset
  * @param randomEffectProjector the random effect projector
+ * @author xazhang
  */
 class RandomEffectDataSetInProjectedSpace(
     val randomEffectDataSetInProjectedSpace: RandomEffectDataSet,
     val randomEffectProjector: RandomEffectProjector)
     extends RandomEffectDataSet(
       randomEffectDataSetInProjectedSpace.activeData,
-      randomEffectDataSetInProjectedSpace.uniqueIdToRandomEffectIds,
+      randomEffectDataSetInProjectedSpace.globalIdToIndividualIds,
       randomEffectDataSetInProjectedSpace.passiveDataOption,
-      randomEffectDataSetInProjectedSpace.passiveDataRandomEffectIdsOption,
-      randomEffectDataSetInProjectedSpace.randomEffectType,
+      randomEffectDataSetInProjectedSpace.passiveDataIndividualIdsOption,
+      randomEffectDataSetInProjectedSpace.randomEffectId,
       randomEffectDataSetInProjectedSpace.featureShardId) {
 
   override def setName(name: String): this.type = {

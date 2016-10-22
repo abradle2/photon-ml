@@ -17,9 +17,10 @@ package com.linkedin.photon.ml.optimization.game
 import com.linkedin.photon.ml.optimization._
 
 /**
- * Optimization tracker for factored random effect optimization problems
+ * Optimization tracker for factored randon effect optimization problems
  *
  * @param optimizationStateTracker original state tracker for the optimization problem
+ * @author xazhang
  */
 protected[ml] class FixedEffectOptimizationTracker(optimizationStateTracker: OptimizationStatesTracker)
     extends OptimizationTracker {

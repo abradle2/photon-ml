@@ -16,6 +16,7 @@ package com.linkedin.photon.ml.normalization;
 
 /**
  * The enum of different normalization types used for feature normalization.
+ * @author dpeng
  */
 public enum NormalizationType {
 

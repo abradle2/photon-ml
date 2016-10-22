@@ -15,7 +15,7 @@
 package com.linkedin.photon.ml.util
 
 /**
-  * This trait defines a proper contract for an IndexMap.
+  * This trait tries to define a protoal of what's a proper contract when building an IndexMap.
   */
 trait IndexMapBuilder {
 
@@ -26,7 +26,7 @@ trait IndexMapBuilder {
     * @param partitionId The partition id of current builder
     * @return the current builder
     */
-  def init(outputDir: String, partitionId: Int, namespace: String): IndexMapBuilder
+  def init(outputDir: String, partitionId: Int): IndexMapBuilder
 
   /**
     * Close current builder

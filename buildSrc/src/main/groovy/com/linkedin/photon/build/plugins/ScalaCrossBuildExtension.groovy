@@ -18,7 +18,9 @@ import org.gradle.api.file.FileTree
 import org.gradle.api.internal.DefaultDomainObjectSet
 
 /**
- * Provides configurable extension for ScalaCrossBuildPlugin.
+ * Provides confiugrable extension for ScalaCrossBuildPlugin.
+ *
+ * @author cfreeman
  */
 class ScalaCrossBuildExtension {
 

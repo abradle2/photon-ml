@@ -19,8 +19,6 @@ import org.testng.annotations.Test
 import org.testng.Assert._
 
 import com.linkedin.photon.ml.constants.StorageLevel
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
-import com.linkedin.photon.ml.optimization.LogisticRegressionOptimizationProblem
 import com.linkedin.photon.ml.test.SparkTestUtils
 
 class GAMEModelTest extends SparkTestUtils {
@@ -114,11 +112,11 @@ class GAMEModelTest extends SparkTestUtils {
     val randomEffectModel = getRandomEffectModel(sc, 1)
     val modelsMap = Map(randomEffectModelName -> randomEffectModel)
     val gameModel = new GAMEModel(modelsMap)
-    assertFalse(randomEffectModel.modelsRDD.getStorageLevel.isValid)
+    assertFalse(randomEffectModel.coefficientsRDD.getStorageLevel.isValid)
     gameModel.persist(StorageLevel.INFREQUENT_REUSE_RDD_STORAGE_LEVEL)
-    assertEquals(randomEffectModel.modelsRDD.getStorageLevel, StorageLevel.INFREQUENT_REUSE_RDD_STORAGE_LEVEL)
+    assertEquals(randomEffectModel.coefficientsRDD.getStorageLevel, StorageLevel.INFREQUENT_REUSE_RDD_STORAGE_LEVEL)
     gameModel.unpersist
-    assertFalse(randomEffectModel.modelsRDD.getStorageLevel.isValid)
+    assertFalse(randomEffectModel.coefficientsRDD.getStorageLevel.isValid)
   }
 
   @Test
@@ -171,13 +169,13 @@ object GAMEModelTest {
     */
   protected def getFixedEffectModel(sc: SparkContext, coefficientDimension: Int): FixedEffectModel = {
     // Coefficients parameter
-    val glm: GeneralizedLinearModel = LogisticRegressionOptimizationProblem.initializeZeroModel(coefficientDimension)
+    val coefficients = Coefficients.initializeZeroCoefficients(coefficientDimension)
 
     // Meta data
     val featureShardId = "featureShardId"
 
     // Fixed effect model
-    new FixedEffectModel(sc.broadcast(glm), featureShardId)
+    new FixedEffectModel(sc.broadcast(coefficients), featureShardId)
   }
 
   /**
@@ -189,15 +187,15 @@ object GAMEModelTest {
     */
   protected def getRandomEffectModel(sc: SparkContext, coefficientDimension: Int): RandomEffectModel = {
     // Coefficients parameter
-    val glm: GeneralizedLinearModel = LogisticRegressionOptimizationProblem.initializeZeroModel(coefficientDimension)
+    val coefficients = Coefficients.initializeZeroCoefficients(coefficientDimension)
 
     // Meta data
     val featureShardId = "featureShardId"
-    val randomEffectType = "randomEffectType"
+    val randomEffectId = "randomEffectId"
 
     // Random effect model
     val numCoefficients = 5
-    val modelsRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, glm)))
-    new RandomEffectModel(modelsRDD, randomEffectType, featureShardId)
+    val coefficientsRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, coefficients)))
+    new RandomEffectModel(coefficientsRDD, randomEffectId, featureShardId)
   }
 }

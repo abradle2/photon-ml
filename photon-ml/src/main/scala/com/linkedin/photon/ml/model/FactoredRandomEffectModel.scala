@@ -14,29 +14,23 @@
  */
 package com.linkedin.photon.ml.model
 
-import com.linkedin.photon.ml.BroadcastLike
-import com.linkedin.photon.ml.projector.ProjectionMatrixBroadcast
-import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
 import org.apache.spark.rdd.RDD
 
+import com.linkedin.photon.ml.BroadcastLike
+import com.linkedin.photon.ml.projector.ProjectionMatrixBroadcast
+
 /**
- * Representation of a factored random effect model
+ * Representation for a factored random effect model
  *
- * @param modelsInProjectedSpaceRDD The underlying model coefficients in projected space
- * @param projectionMatrixBroadcast The projector between the original and projected spaces
- * @param randomEffectType The random effect type
- * @param featureShardId The feature shard id
+ * @author xazhang
  */
 protected[ml] class FactoredRandomEffectModel(
-    override val modelsInProjectedSpaceRDD: RDD[(String, GeneralizedLinearModel)],
+    override val coefficientsRDDInProjectedSpace: RDD[(String, Coefficients)],
     val projectionMatrixBroadcast: ProjectionMatrixBroadcast,
-    override val randomEffectType: String,
+    override val randomEffectId: String,
     override val featureShardId: String)
-  extends RandomEffectModelInProjectedSpace(
-    modelsInProjectedSpaceRDD,
-    projectionMatrixBroadcast,
-    randomEffectType,
-    featureShardId) with BroadcastLike {
+    extends RandomEffectModelInProjectedSpace(coefficientsRDDInProjectedSpace, projectionMatrixBroadcast,
+      randomEffectId, featureShardId) with BroadcastLike {
 
   override def unpersistBroadcast(): this.type = {
     projectionMatrixBroadcast.unpersistBroadcast()
@@ -46,7 +40,7 @@ protected[ml] class FactoredRandomEffectModel(
   /**
    * Build a summary string for the model
    *
-   * @return String representation
+   * @return string representation
    */
   override def toSummaryString: String = {
     val stringBuilder = new StringBuilder(super.toSummaryString)
@@ -56,20 +50,16 @@ protected[ml] class FactoredRandomEffectModel(
   }
 
   /**
-   * Update the factored random effect model with new models per individual
+   * Update the factored model
    *
-   * @param updatedModelsInProjectedSpaceRDD The new models with updated coefficients in projected space
-   * @param updatedProjectionMatrixBroadcast The updated projection matrix
-   * @return The updated factored random effect model in projected space
+   * @param updatedCoefficientsRDDInProjectedSpace updated coefficients in projected space
+   * @param updatedProjectionMatrixBroadcast updated projection matrix
+   * @return updated model
    */
   def updateFactoredRandomEffectModel(
-      updatedModelsInProjectedSpaceRDD: RDD[(String, GeneralizedLinearModel)],
+      updatedCoefficientsRDDInProjectedSpace: RDD[(String, Coefficients)],
       updatedProjectionMatrixBroadcast: ProjectionMatrixBroadcast): FactoredRandomEffectModel = {
-
-    new FactoredRandomEffectModel(
-      updatedModelsInProjectedSpaceRDD,
-      updatedProjectionMatrixBroadcast,
-      randomEffectType,
-      featureShardId)
+    new FactoredRandomEffectModel(updatedCoefficientsRDDInProjectedSpace, updatedProjectionMatrixBroadcast,
+      randomEffectId, featureShardId)
   }
 }
