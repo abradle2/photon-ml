@@ -28,8 +28,6 @@ import org.testng.annotations.{Test, DataProvider}
  *
  * Down sampling is run multiple times and number of instances in each run is accumulated to allow law of large
  * numbers to kick in
- *
- * @author nkatariy
  */
 class BinaryClassificationDownSamplerIntegTest extends SparkTestUtils {
   val numTimesToRun = 100
@@ -70,7 +68,7 @@ class BinaryClassificationDownSamplerIntegTest extends SparkTestUtils {
 
   @DataProvider
   def downSamplingRatesProvider(): Array[Array[Any]] = {
-    Array(Array(0.0), Array(0.25), Array(0.5), Array(0.75), Array(1.0))
+    Array(Array(0.25), Array(0.5), Array(0.75), Array(1.0))
   }
 
   @Test(dataProvider = "downSamplingRatesProvider")
@@ -99,9 +97,7 @@ class BinaryClassificationDownSamplerIntegTest extends SparkTestUtils {
       })
     }
 
-    if (downSamplingRate == 0.0) {
-      Assert.assertEquals(numNegativesInSampled, 0)
-    } else if (downSamplingRate == 1.0) {
+    if (downSamplingRate == 1.0) {
       Assert.assertEquals(numNegativesInSampled, numTimesToRun * numNegativesToGenerate)
     } else {
       Assert.assertEquals(numNegativesInSampled * 1.0 / numTimesToRun / numNegativesToGenerate,

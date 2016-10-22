@@ -28,7 +28,6 @@ import com.linkedin.photon.ml.projector.Projector
  * Local dataset implementation
  *
  * @param dataPoints Local data points consists of (uniqueId, labeledPoint) pairs
- * @author xazhang
  * @todo Use Array or Map to represent the local data structure?
  *       Array: overhead in sorting the entries by key
  *       Map: overhead in accessing value by key
@@ -45,7 +44,7 @@ protected[ml] case class LocalDataSet(dataPoints: Array[(Long, LabeledPoint)]) {
 
   def getOffsets: Array[(Long, Double)] = dataPoints.map { case (uid, labeledPoint) => (uid, labeledPoint.offset) }
 
-  def getGlobalIds: Array[Long] = dataPoints.map(_._1)
+  def getUniqueIds: Array[Long] = dataPoints.map(_._1)
 
   /**
    * Add the residual scores to the offsets

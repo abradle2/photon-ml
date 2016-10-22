@@ -17,6 +17,8 @@ package com.linkedin.photon.ml.model
 import org.testng.annotations.Test
 import org.testng.Assert._
 
+import com.linkedin.photon.ml.supervised.model.GeneralizedLinearModel
+import com.linkedin.photon.ml.optimization.LogisticRegressionOptimizationProblem
 import com.linkedin.photon.ml.test.SparkTestUtils
 
 
@@ -30,41 +32,43 @@ class RandomEffectModelTest extends SparkTestUtils {
 
     // Coefficients parameter
     val coefficientDimension = 1
-    val coefficients = Coefficients.initializeZeroCoefficients(coefficientDimension)
+    val glm: GeneralizedLinearModel = LogisticRegressionOptimizationProblem.initializeZeroModel(coefficientDimension)
 
     // Meta data
     val featureShardId = "featureShardId"
-    val randomEffectId = "randomEffectId"
+    val randomEffectType = "randomEffectType"
 
     // Random effect model
     val numCoefficients = 5
-    val coefficientsRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, coefficients)))
-    val randomEffectModel = new RandomEffectModel(coefficientsRDD, randomEffectId, featureShardId)
+    val modelsRDD = sc.parallelize(Seq.tabulate(numCoefficients)(i => (i.toString, glm)))
+
+    val randomEffectModel = new RandomEffectModel(modelsRDD, randomEffectType, featureShardId)
 
     // Should equal to itself
     assertEquals(randomEffectModel, randomEffectModel)
 
-    // Should equal to the random effect model with same featureShardId, randomEffectId and coefficientsRDD
-    val randomEffectModelCopy = new RandomEffectModel(coefficientsRDD, randomEffectId, featureShardId)
+    // Should equal to the random effect model with same featureShardId, randomEffectType and coefficientsRDD
+    val randomEffectModelCopy = new RandomEffectModel(modelsRDD, randomEffectType, featureShardId)
     assertEquals(randomEffectModel, randomEffectModelCopy)
 
     // Should not equal to the random effect model with different featureShardId
     val featureShardId1 = "featureShardId1"
     val randomEffectModelWithDiffFeatureShardId =
-      new RandomEffectModel(coefficientsRDD, randomEffectId, featureShardId1)
+      new RandomEffectModel(modelsRDD, randomEffectType, featureShardId1)
     assertNotEquals(randomEffectModel, randomEffectModelWithDiffFeatureShardId)
 
-    // Should not equal to the random effect model with different randomEffectId
-    val randomEffectId1 = "randomEffectId1"
+    // Should not equal to the random effect model with different randomEffectType
+    val randomEffectType1 = "randomEffectType1"
     val randomEffectModelWithDiffRandomEffectShardId =
-      new RandomEffectModel(coefficientsRDD, randomEffectId1, featureShardId)
+      new RandomEffectModel(modelsRDD, randomEffectType1, featureShardId)
     assertNotEquals(randomEffectModel, randomEffectModelWithDiffRandomEffectShardId)
 
     // Should not equal to the random effect model with different coefficientsRDD
     val numCoefficients1 = numCoefficients + 1
-    val coefficientsRDD1 = sc.parallelize(Seq.tabulate(numCoefficients1)(i => (i.toString, coefficients)))
+    val modelsRDD1 = sc.parallelize(Seq.tabulate(numCoefficients1)(i => (i.toString, glm)))
+
     val randomEffectModelWithDiffCoefficientsRDD =
-      new RandomEffectModel(coefficientsRDD1, randomEffectId, featureShardId)
+      new RandomEffectModel(modelsRDD1, randomEffectType, featureShardId)
     assertNotEquals(randomEffectModel, randomEffectModelWithDiffCoefficientsRDD)
   }
 }

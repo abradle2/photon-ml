@@ -14,7 +14,6 @@
  */
 package com.linkedin.photon.ml.optimization
 
-
 import breeze.linalg.norm
 import breeze.optimize.FirstOrderMinimizer.{ConvergenceReason, FunctionValuesConverged, GradientConverged}
 import org.apache.spark.Logging
@@ -25,8 +24,9 @@ import scala.collection.mutable
  * Class to track the history of an optimizer's states and wall-clock time elapsed per iteration
  * @param maxNumStates The maximum number of states to track. This is used to prevent the OptimizationHistoryTracker
  *                     from using too much memory to track the history of the states.
- * @note  DO NOT USE this class outside of Photon-ML. It is intended as an internal utility, and is likely to be changed
- *   or removed in future releases.
+ *
+ * @note  DO NOT USE this class outside of Photon-ML. It is intended as an internal utility, and is likely to be
+ *        changed or removed in future releases.
  */
 protected[ml] class OptimizationStatesTracker(maxNumStates: Int = 100) extends Serializable with Logging {
 
@@ -36,7 +36,9 @@ protected[ml] class OptimizationStatesTracker(maxNumStates: Int = 100) extends S
 
   var convergenceReason: Option[ConvergenceReason] = None
 
-  /** True if the optimizer is done because either function values converged or gradient converged  */
+  /**
+    * @return True if the optimizer is done because either function values converged or gradient converged
+    */
   def converged: Boolean =
     convergenceReason == Some(FunctionValuesConverged) || convergenceReason == Some(GradientConverged)
 

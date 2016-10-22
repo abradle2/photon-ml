@@ -14,23 +14,26 @@
  */
 package com.linkedin.photon.ml.cli.game.training
 
+import com.linkedin.photon.ml.OptionNames._
+import com.linkedin.photon.ml.cli.game.{EvaluatorParams, FeatureParams}
+import com.linkedin.photon.ml.evaluation.EvaluatorType
 import com.linkedin.photon.ml.optimization.game.{MFOptimizationConfiguration, GLMOptimizationConfiguration}
 import com.linkedin.photon.ml.data.{FixedEffectDataConfiguration, RandomEffectDataConfiguration}
 import com.linkedin.photon.ml.io.ModelOutputMode
 import com.linkedin.photon.ml.io.ModelOutputMode._
 import com.linkedin.photon.ml.supervised.TaskType
 import com.linkedin.photon.ml.supervised.TaskType._
+import com.linkedin.photon.ml.util.PalDBIndexMapParams
 import scopt.OptionParser
-
-import scala.collection.{Map, Set}
 
 /**
  * A bean class for GAME training parameters to replace the original case class for input parameters.
+ *
  * @note Note that examples of how to configure GAME parameters can be found in the integration tests for the GAME
  *       driver.
  * @todo Making the way GAME being configured more user friendly
  */
-class Params {
+class Params extends FeatureParams with PalDBIndexMapParams with EvaluatorParams {
 
   /**
    * Input directories of training data. Multiple input directories are also accepted if they are
@@ -82,24 +85,6 @@ class Params {
   var minPartitionsForValidation: Int = 1
 
   /**
-   * Input path to the features name-and-term lists.
-   */
-  var featureNameAndTermSetInputPath: String = ""
-
-  /**
-   * A map between the feature shard id and it's corresponding feature section keys in the following format:
-   * shardId1:sectionKey1,sectionKey2|shardId2:sectionKey2,sectionKey3.
-   */
-  var featureShardIdToFeatureSectionKeysMap: Map[String, Set[String]] = Map()
-
-  /**
-   * A map between the feature shard id and a boolean variable that decides whether a dummy feature should be added
-   * to the corresponding shard in order to learn an intercept, for example,
-   * in the following format: shardId1:true|shardId2:false. The default is true for all or unspecified shard ids.
-   */
-  var featureShardIdToInterceptMap: Map[String, Boolean] = Map()
-
-  /**
    * Output directory for logs and learned models.
    */
   var outputDir: String = ""
@@ -108,6 +93,11 @@ class Params {
    * Number of coordinate descent iterations.
    */
   var numIterations: Int = 1
+
+  /**
+   * Whether to compute coefficient variance
+   */
+  var computeVariance: Boolean = false
 
   /**
    * Updating order of the ordinates (separated by commas) in the coordinate descent algorithm.
@@ -192,10 +182,13 @@ class Params {
             .map(_.mkString("\n")).mkString("\n")}\n" +
         s"randomEffectDataConfigurations:\n${randomEffectDataConfigurations.mkString("\n")}\n" +
         s"taskType: $taskType\n" +
+        s"computeVariance: $computeVariance\n" +
         s"modelOutputOption: $modelOutputMode\n" +
         s"numberOfOutputFilesForRandomEffectModel: $numberOfOutputFilesForRandomEffectModel\n" +
         s"deleteOutputDirIfExists: $deleteOutputDirIfExists\n" +
-        s"applicationName: $applicationName"
+        s"applicationName: $applicationName\n" +
+        s"offHeapIndexMapDir: $offHeapIndexMapDir\n" +
+        s"offHeapIndexMapNumPartitions: $offHeapIndexMapNumPartitions"
   }
 }
 
@@ -216,11 +209,20 @@ object Params {
       opt[String]("output-dir")
         .required()
         .text(s"Output directory for logs and learned models.")
-        .foreach(x => params.outputDir = x.replace(',', '_').replace(':', '_'))
+        .foreach(x => params.outputDir = x.replace(',', '_'))
       opt[String]("feature-name-and-term-set-path")
         .required()
-        .text(s"Input path to the features name-and-term lists.")
+        .text(s"Input path to the features name-and-term lists.\n" +
+          s"DEPRECATED -- This option will be removed in the next major version. Use the offheap index map " +
+          s"configuration instead")
         .foreach(x => params.featureNameAndTermSetInputPath = x)
+      opt[String]("updating-sequence")
+        .required()
+        .text(s"Updating order of the ordinates (separated by commas) in the coordinate descent algorithm. It is " +
+          s"recommended to order different fixed/random effect models based on their stability (e.g., by looking " +
+          s"at the variance of the feature distribution (or correlation with labels) for each of the " +
+          s"fixed/random effect model),")
+        .foreach(x => params.updatingSequence = x.split(","))
       opt[String]("train-date-range")
         .text(s"Date range for the training data represented in the form start.date-end.date, " +
           s"e.g. 20150501-20150631. If this parameter is specified, the input directory is expected to be in the " +
@@ -308,9 +310,6 @@ object Params {
             }
             .toMap
         )
-      opt[String]("updating-sequence")
-        .text(s"Updating order of the ordinates (separated by commas) in the coordinate descent algorithm.")
-        .foreach(x => params.updatingSequence = x.split(","))
       opt[String]("random-effect-optimization-configurations")
         .text("Optimization configurations for each random effect optimization problem. " +
           s"Expected format (if the GAME model contains two random effect model called model1 and mode2):\n" +
@@ -351,6 +350,9 @@ object Params {
             }
             .toMap
         )
+      opt[Boolean]("compute-variance")
+        .text(s"Whether to compute the coefficient variance, default: ${defaultParams.computeVariance}")
+        .foreach(x => params.computeVariance = x)
       opt[Boolean]("save-models-to-hdfs")
         .text(s"DEPRECATED -- USE model-output-mode")
         .foreach(x => params.modelOutputMode = if (x) ALL else NONE)
@@ -368,6 +370,19 @@ object Params {
       opt[String]("application-name")
         .text(s"Name of this Spark application. Default: ${defaultParams.applicationName}.")
         .foreach(x => params.applicationName = x)
+      opt[String](OFFHEAP_INDEXMAP_DIR)
+        .text("The offheap storage directory if offheap map is needed. DefaultIndexMap will be used if not specified.")
+        .foreach(x => params.offHeapIndexMapDir = Some(x))
+      opt[Int](OFFHEAP_INDEXMAP_NUM_PARTITIONS)
+        .text("The number of partitions for the offheap map storage. This partition number should be consistent with " +
+            "the number when offheap storage is built. This parameter affects only the execution speed during " +
+            "feature index building and has zero performance impact on training other than maintaining a " +
+            "convention.")
+        .foreach(x => params.offHeapIndexMapNumPartitions = x)
+      opt[String](EvaluatorType.cmdArgument)
+        .text("Type of the evaluator used to evaluate the computed scores.")
+        .foreach(x => params.evaluatorTypes = x.split(",").map(EvaluatorType.withName))
+
       help("help").text("prints usage text.")
       override def showUsageOnError = true
     }

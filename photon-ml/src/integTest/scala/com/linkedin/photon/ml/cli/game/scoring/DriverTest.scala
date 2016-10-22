@@ -14,17 +14,41 @@
  */
 package com.linkedin.photon.ml.cli.game.scoring
 
+import scala.util.Random
+
 import org.apache.hadoop.fs.Path
+import org.apache.spark.SparkException
 import org.apache.spark.mllib.evaluation.RegressionMetrics
 import org.testng.Assert._
 import org.testng.annotations.{DataProvider, Test}
 
 import com.linkedin.photon.ml.avro.data.ScoreProcessingUtils
 import com.linkedin.photon.ml.constants.MathConst
+import com.linkedin.photon.ml.data.{GameDatum, KeyValueScore}
+import com.linkedin.photon.ml.evaluation._
 import com.linkedin.photon.ml.test.{CommonTestUtils, SparkTestUtils, TestTemplateWithTmpDir}
 import com.linkedin.photon.ml.util.PhotonLogger
 
 class DriverTest extends SparkTestUtils with TestTemplateWithTmpDir {
+
+  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
+  def failedTestRunWithUnsupportedEvaluatorType(): Unit = sparkTest("failedTestRunWithUnsupportedEvaluatorType") {
+    val args = DriverTest.yahooMusicArgs(getTmpDir, evaluatorTypes = Seq("UnknownEvaluator"))
+    runDriver(CommonTestUtils.argArray(args))
+  }
+
+  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
+  def failedTestRunWithNaNInGAMEData(): Unit = sparkTest("failedTestRunWithNaNInGAMEData") {
+    val gameDatum = new GameDatum(
+      response = Double.NaN,
+      offsetOpt = Some(0.0),
+      weightOpt = Some(1.0),
+      featureShardContainer = Map(),
+      idTypeToValueMap = Map())
+    val gameDataSet = sc.parallelize(Seq((1L, gameDatum)))
+    val scores = new KeyValueScore(sc.parallelize(Seq((1L, 0.0))))
+    Driver.evaluateScores(evaluatorType = SmoothedHingeLoss, scores = scores, gameDataSet)
+  }
 
   @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
   def failedTestRunWithOutputDirExists(): Unit = sparkTest("failedTestRunWithOutputDirExists") {
@@ -62,9 +86,116 @@ class DriverTest extends SparkTestUtils with TestTemplateWithTmpDir {
   }
 
   @Test
-  def endToEndRunWithYahooMusicDataSet(): Unit = sparkTest("endToEndRunWithYahooMusicDataSet") {
+  def endToEndRunWithFullGLMix(): Unit = sparkTest("endToEndRunWithFullGLMix") {
     val outputDir = getTmpDir
-    val args = DriverTest.yahooMusicArgs(outputDir, deleteOutputDirIfExists = true)
+    val args = DriverTest.yahooMusicArgs(outputDir, fixedEffectOnly = false, deleteOutputDirIfExists = true)
+    runDriver(CommonTestUtils.argArray(args))
+
+    // Load the scores and compute the evaluation metric to see whether the scores make sense or not
+    val scoreDir = Driver.getScoresDir(outputDir)
+    val predictionAndObservations = ScoreProcessingUtils.loadScoredItemsFromHDFS(scoreDir, sc)
+        .map { case (modelId, scoredItem) => (scoredItem.predictionScore, scoredItem.label.get) }
+
+    val rootMeanSquaredError = new RegressionMetrics(predictionAndObservations).rootMeanSquaredError
+
+    // Compare with the RMSE capture from an assumed-correct implementation on 5/20/2016
+    assertEquals(rootMeanSquaredError, 1.32106, MathConst.LOW_PRECISION_TOLERANCE_THRESHOLD)
+  }
+
+  @Test
+  def endToEndRunWithFixedEffectOnlyGLMix(): Unit = sparkTest("endToEndRunWithFixedEffectOnlyGLMix") {
+    val outputDir = getTmpDir
+    val args = DriverTest.yahooMusicArgs(outputDir, fixedEffectOnly = true, deleteOutputDirIfExists = true)
+    runDriver(CommonTestUtils.argArray(args))
+
+    // Load the scores and compute the evaluation metric to see whether the scores make sense or not
+    val scoreDir = Driver.getScoresDir(outputDir)
+    val predictionAndObservations = ScoreProcessingUtils.loadScoredItemsFromHDFS(scoreDir, sc)
+        .map { case (modelId, scoredItem) => (scoredItem.predictionScore, scoredItem.label.get) }
+
+    val rootMeanSquaredError = new RegressionMetrics(predictionAndObservations).rootMeanSquaredError
+
+    // Compare with the RMSE capture from an assumed-correct implementation on 7/27/2016
+    assertEquals(rootMeanSquaredError, 1.321715, MathConst.LOW_PRECISION_TOLERANCE_THRESHOLD)
+  }
+
+  @Test
+  def evaluateFixedEffectOnlyGLMixWithPrecisionAtK(): Unit = sparkTest("evaluateFixedEffectOnlyGLMixWithPrecisionAtK") {
+    val args = DriverTest.yahooMusicArgs(
+      getTmpDir,
+      fixedEffectOnly = true,
+      deleteOutputDirIfExists = true,
+      evaluatorTypes = Seq("precision@1:userId, precision@5:songId, precision@10:numFeatures"))
+
+    val driver = runDriver(CommonTestUtils.argArray(args))
+    assertEquals(driver.idTypeSet, Set("userId", "songId", "numFeatures"))
+  }
+
+  @Test(expectedExceptions = Array(classOf[SparkException]))
+  def evaluateFixedEffectModelWithPrecisionAtKOfUnknownId()
+  : Unit = sparkTest("evaluateFixedEffectModelWithPrecisionAtKOfUnknownId") {
+
+    val args = DriverTest.yahooMusicArgs(
+      getTmpDir,
+      fixedEffectOnly = true,
+      deleteOutputDirIfExists = true,
+      evaluatorTypes = Seq("precision@1:userId, precision@5:foo, precision@10:bar"))
+
+    runDriver(CommonTestUtils.argArray(args))
+  }
+
+  @Test(expectedExceptions = Array(classOf[SparkException]))
+  def evaluateFullModelWithPrecisionAtKOfUnknownId(): Unit = sparkTest("evaluateFullModelWithPrecisionAtKOfUnknownId") {
+    val args = DriverTest.yahooMusicArgs(
+      getTmpDir,
+      deleteOutputDirIfExists = true,
+      evaluatorTypes = Seq("precision@1:userId, precision@5:foo, precision@10:bar"))
+
+    runDriver(CommonTestUtils.argArray(args))
+  }
+
+  @DataProvider
+  def evaluatorTypeProvider(): Array[Array[Any]] = {
+    Array(
+      Array(Seq(AUC, LogisticLoss)),
+      Array(Seq(PoissonLoss)),
+      Array(Seq(RMSE, SquaredLoss)),
+      Array(Seq(SmoothedHingeLoss)),
+      Array(Seq(ShardedPrecisionAtK(1, "queryId"), ShardedPrecisionAtK(5, "documentId"))),
+      Array(Seq(ShardedAUC("queryId"), ShardedAUC("documentId")))
+    )
+  }
+
+  @Test(dataProvider = "evaluatorTypeProvider")
+  def testEvaluateScores(evaluatorTypes: Seq[EvaluatorType]): Unit = sparkTest("testEvaluateScores") {
+    val numSamples = 10
+    val random = new Random(MathConst.RANDOM_SEED).self
+    val scores = new KeyValueScore(sc.parallelize((0 until numSamples).map(idx => (idx.toLong, random.nextDouble()))))
+    val labels = sc.parallelize((0 until numSamples).map(idx => (idx.toLong, random.nextInt(2))))
+    val gameDataSet = labels.mapValues(label =>
+      new GameDatum(
+        response = label,
+        offsetOpt = Some(0.0),
+        weightOpt = Some(1.0),
+        featureShardContainer = Map(),
+        idTypeToValueMap = Map("queryId" -> random.nextInt(2).toString, "documentId" -> random.nextInt(2).toString)
+      )
+    )
+    evaluatorTypes.foreach { evaluatorType =>
+      val computedMetric = Driver.evaluateScores(evaluatorType, scores, gameDataSet)
+      val evaluator = Evaluator.buildEvaluator(evaluatorType, gameDataSet)
+      val expectedMetric = evaluator.evaluate(scores.scores)
+      assertEquals(computedMetric, expectedMetric, MathConst.MEDIUM_PRECISION_TOLERANCE_THRESHOLD)
+    }
+  }
+
+  @Test
+  def testOffHeapIndexMap(): Unit = sparkTest("offHeapIndexMap") {
+    val outputDir = getTmpDir
+    val indexMapPath = getClass.getClassLoader.getResource("GameIntegTest/input/test-with-uid-feature-indexes").getPath
+    val args = DriverTest.yahooMusicArgs(outputDir, fixedEffectOnly = false, deleteOutputDirIfExists = true) ++ Map(
+      "offheap-indexmap-dir" -> indexMapPath,
+      "offheap-indexmap-num-partitions" -> "1")
     runDriver(CommonTestUtils.argArray(args))
 
     // Load the scores and compute the evaluation metric to see whether the scores make sense or not
@@ -105,24 +236,25 @@ object DriverTest {
       fixedEffectOnly: Boolean = false,
       deleteOutputDirIfExists: Boolean = true,
       numOutputFiles: Int = 1,
-      modelId: String = ""): Map[String, String] = {
+      modelId: String = "",
+      evaluatorTypes: Seq[String] = Seq("RMSE")): Map[String, String] = {
 
     val inputRoot = getClass.getClassLoader.getResource("GameIntegTest").getPath
     val inputDir = new Path(inputRoot, "input/test-with-uid").toString
     val featurePath = new Path(inputRoot, "input/feature-lists").toString
 
-    val (featureShardIdToFeatureSectionKeysMap, randomEffectIdSet, modelDir) =
+    val argumentsForGLMix =
       if (fixedEffectOnly) {
         val featureMap = "globalShard:features,songFeatures,userFeatures"
-        val idSet = ","
         val modelDir = new Path(inputRoot, "fixedEffectOnlyGAMEModel").toString
-        (featureMap, idSet, modelDir)
+        Map("feature-shard-id-to-feature-section-keys-map" -> featureMap, "game-model-input-dir" -> modelDir)
       } else {
         val featureMap = "globalShard:features,songFeatures,userFeatures|userShard:features,songFeatures" +
             "|songShard:features,userFeatures"
         val idSet = "userId,songId"
         val modelDir = new Path(inputRoot, "gameModel").toString
-        (featureMap, idSet, modelDir)
+        Map("feature-shard-id-to-feature-section-keys-map" -> featureMap, "game-model-input-dir" -> modelDir,
+          "random-effect-id-set" -> idSet)
       }
 
     val applicationName = "GAME-Scoring-Integ-Test"
@@ -130,14 +262,12 @@ object DriverTest {
     Map(
       "input-data-dirs" -> inputDir,
       "feature-name-and-term-set-path" -> featurePath,
-      "feature-shard-id-to-feature-section-keys-map" -> featureShardIdToFeatureSectionKeysMap,
-      "random-effect-id-set" -> randomEffectIdSet,
       "game-model-id" -> modelId,
-      "game-model-input-dir" -> modelDir,
       "output-dir" -> outputDir,
       "num-files" -> numOutputFiles.toString,
       "delete-output-dir-if-exists" -> deleteOutputDirIfExists.toString,
-      "application-name" -> applicationName
-    )
+      "application-name" -> applicationName,
+      "evaluator-type" -> evaluatorTypes.mkString(",")
+    ) ++ argumentsForGLMix
   }
 }

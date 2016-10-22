@@ -14,24 +14,20 @@
  */
 package com.linkedin.photon.ml
 
-
 import java.io.{IOException, OutputStreamWriter, PrintWriter}
 
 import com.linkedin.photon.ml.data.{DataValidators, LabeledPoint}
 import com.linkedin.photon.ml.diagnostics.DiagnosticMode
 import com.linkedin.photon.ml.diagnostics.bootstrap.{BootstrapReport, BootstrapTrainingDiagnostic}
-import com.linkedin.photon.ml.diagnostics.featureimportance.{
-  FeatureImportanceReport, ExpectedMagnitudeFeatureImportanceDiagnostic, VarianceFeatureImportanceDiagnostic}
+import com.linkedin.photon.ml.diagnostics.featureimportance.{ExpectedMagnitudeFeatureImportanceDiagnostic, FeatureImportanceReport, VarianceFeatureImportanceDiagnostic}
 import com.linkedin.photon.ml.diagnostics.fitting.{FittingDiagnostic, FittingReport}
-import com.linkedin.photon.ml.diagnostics.hl.{HosmerLemeshowReport, HosmerLemeshowDiagnostic}
-import com.linkedin.photon.ml.diagnostics.independence.{PredictionErrorIndependenceReport,
-PredictionErrorIndependenceDiagnostic}
+import com.linkedin.photon.ml.diagnostics.hl.{HosmerLemeshowDiagnostic, HosmerLemeshowReport}
+import com.linkedin.photon.ml.diagnostics.independence.{PredictionErrorIndependenceDiagnostic, PredictionErrorIndependenceReport}
 import com.linkedin.photon.ml.diagnostics.reporting.html.HTMLRenderStrategy
-import com.linkedin.photon.ml.diagnostics.reporting.reports.combined.{
-  DiagnosticReport, DiagnosticToPhysicalReportTransformer}
+import com.linkedin.photon.ml.diagnostics.reporting.reports.combined.{DiagnosticReport, DiagnosticToPhysicalReportTransformer}
 import com.linkedin.photon.ml.diagnostics.reporting.reports.model.ModelDiagnosticReport
 import com.linkedin.photon.ml.diagnostics.reporting.reports.system.SystemReport
-import com.linkedin.photon.ml.io.GLMSuite
+import com.linkedin.photon.ml.io.{GLMSuite, InputDataFormat, InputFormatFactory}
 import com.linkedin.photon.ml.normalization.{NoNormalization, NormalizationContext, NormalizationType}
 import com.linkedin.photon.ml.optimization.RegularizationContext
 import com.linkedin.photon.ml.stat.{BasicStatisticalSummary, BasicStatistics}
@@ -52,29 +48,24 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.xml.PrettyPrinter
 
 /**
- * Driver for the Photon-ML core machine learning algorithms. The processing done in the driver include three main
- * components:
- * <ul>
- * <li> Preprocess, which reads in the data in the raw form (e.g., Avro) and transform and index them into Photon-ML's
- * internal data structure </li>
- * <li> Train, which trains the model given the user's specified configurations and parameters
- * (through [[Params]]) </li>
- * <li> Validate, which validates the trained model using the validating data set, if provided, and select the best
- * model given the validating results </li>
- * </ul>
- * More detailed documentation can be found either through the comments and notations in the source code, or at
- * [[https://github.com/linkedin/photon-ml#example-scripts]].
+  * Driver for the Photon-ML core machine learning algorithms. The processing done in the driver include three main
+  * components:
+  * <ul>
+  * <li> Preprocess, which reads in the data in the raw form (e.g., Avro) and transform and index them into Photon-ML's
+  * internal data structure </li>
+  * <li> Train, which trains the model given the user's specified configurations and parameters
+  * (through [[Params]]) </li>
+  * <li> Validate, which validates the trained model using the validating data set, if provided, and select the best
+  * model given the validating results </li>
+  * </ul>
+  * More detailed documentation can be found either through the comments and notations in the source code, or at
+  * [[https://github.com/linkedin/photon-ml#example-scripts]].
   *
   * @param params: The Photon-ML parameters [[Params]]], containing essential information
- *              for the underlying model training tasks.
- * @param sc: The Spark context.
- * @param logger: A temporary container to hold the driver's logs.
- * @author xazhang
- * @author yizhou
- * @author dpeng
- * @author bdrew
- * @author nkatariy
- */
+  *              for the underlying model training tasks.
+  * @param sc: The Spark context.
+  * @param logger: A temporary container to hold the driver's logs.
+  */
 protected[ml] class Driver(
   protected val params: Params,
   protected val sc: SparkContext,
@@ -83,9 +74,10 @@ protected[ml] class Driver(
 
   import com.linkedin.photon.ml.Driver._
 
+  private[this] var inputDataFormat: InputDataFormat = null
+
   protected val stageHistory: mutable.ArrayBuffer[DriverStage] = new ArrayBuffer[DriverStage]()
   private[this] val trainDataStorageLevel: StorageLevel = DEFAULT_STORAGE_LEVEL
-  private[this] var suite: GLMSuite = null
   protected var stage: DriverStage = DriverStage.INIT
   private[this] var trainingData: RDD[LabeledPoint] = null
   private[this] var validatingData: RDD[LabeledPoint] = null
@@ -154,7 +146,7 @@ protected[ml] class Driver(
       updateStage(DriverStage.DIAGNOSED)
     }
 
-    // Unpersist the training and validating data
+    // Unpersist the training and validation data
     trainingData.unpersist()
     if (params.validateDirOpt.isDefined) {
       validatingData.unpersist()
@@ -166,27 +158,9 @@ protected[ml] class Driver(
 
     Utils.createHDFSDir(params.outputDir, sc.hadoopConfiguration)
     val finalModelsDir = new Path(params.outputDir, LEARNED_MODELS_TEXT).toString
-    suite.writeModelsInText(sc, lambdaModelTuples, finalModelsDir.toString)
+    IOUtils.writeModelsInText(sc, lambdaModelTuples, finalModelsDir.toString, inputDataFormat.indexMapLoader())
 
     logger.info(s"Final models are written to: $finalModelsDir")
-  }
-
-  protected def prepareGLMSuite(): Unit = {
-    // Prepare offHeapIndexMap loader if provided
-    val offHeapIndexMapLoader = params.offHeapIndexMapDir match {
-      case Some(offHeapDir) =>
-        // TODO: if we want to support other offheap storage in the future, we could modify this into a factory pattern
-        val indexMapLoader = new PalDBIndexMapLoader()
-        indexMapLoader.prepare(sc, params)
-        Some(indexMapLoader)
-      case None => None
-    }
-
-    // Initialize GLMSuite
-    suite = new GLMSuite(params.fieldsNameType,
-      params.addIntercept,
-      params.constraintString,
-      offHeapIndexMapLoader)
   }
 
   protected def prepareTrainingData(): Unit = {
@@ -198,11 +172,11 @@ protected[ml] class Driver(
       }
     })
 
-    trainingData = suite
-      .readLabeledPointsFromAvro(sc, params.trainDir, params.selectedFeaturesFile, params.minNumPartitions)
+    trainingData = inputDataFormat
+      .loadLabeledPoints(sc, params.trainDir, params.selectedFeaturesFile, params.minNumPartitions)
       .persist(trainDataStorageLevel)
       .setName("training data")
-    featureNum = trainingData.first().features.size
+
     trainingDataNum = trainingData.count().toInt
     require(trainingDataNum > 0,
       "No training data found. Ensure that training data exists and feature vectors are not empty.")
@@ -223,9 +197,9 @@ protected[ml] class Driver(
     logger.info(s"\nRead validation data from $validateDir")
 
     // Read validation data after the training data are unpersisted.
-    validatingData =
-      suite.readLabeledPointsFromAvro(sc, validateDir, params.selectedFeaturesFile, params.minNumPartitions)
-        .persist(trainDataStorageLevel).setName("validating data")
+    validatingData = inputDataFormat
+      .loadLabeledPoints(sc, validateDir, params.selectedFeaturesFile, params.minNumPartitions)
+      .persist(trainDataStorageLevel).setName("validating data")
     if (! DataValidators.sanityCheckData(validatingData, params.taskType, params.dataValidationType)) {
       throw new IllegalArgumentException("Validation data has issues")
     }
@@ -236,7 +210,10 @@ protected[ml] class Driver(
     val summary = BasicStatistics.getBasicStatistics(trainingData)
 
     outputDir.foreach { dir =>
-      suite.writeBasicStatistics(sc, summary, dir)
+      IOUtils.writeBasicStatistics(sc,
+        summary,
+        dir,
+        inputDataFormat.indexMapLoader().indexMapForDriver())
       logger.info(s"Feature statistics written to $outputDir")
     }
 
@@ -253,7 +230,7 @@ protected[ml] class Driver(
     /* Preprocess the data for the following model training and validating procedure using the chosen suite */
     val startTimeForPreprocessing = System.currentTimeMillis()
 
-    prepareGLMSuite()
+    inputDataFormat = InputFormatFactory.createInputFormat(sc, params)
 
     prepareTrainingData()
 
@@ -265,7 +242,10 @@ protected[ml] class Driver(
     if (params.summarizationOutputDirOpt.isDefined || params.normalizationType != NormalizationType.NONE) {
       val summary = summarizeFeatures(params.summarizationOutputDirOpt)
       summaryOption = Some(summary)
-      normalizationContext = NormalizationContext(params.normalizationType, summary, suite.getInterceptId)
+      normalizationContext = NormalizationContext(
+        params.normalizationType,
+        summary,
+        inputDataFormat.indexMapLoader().indexMapForDriver().get(GLMSuite.INTERCEPT_NAME_TERM))
     }
 
     val preprocessingTime = (System.currentTimeMillis() - startTimeForPreprocessing) * 0.001
@@ -291,7 +271,7 @@ protected[ml] class Driver(
       maxNumIter = params.maxNumIter,
       tolerance = params.tolerance,
       enableOptimizationStateTracker = params.enableOptimizationStateTracker,
-      constraintMap = suite.constraintFeatureMap,
+      constraintMap = inputDataFormat.constraintFeatureMap(),
       treeAggregateDepth = params.treeAggregateDepth)
     lambdaModelTuples = _lambdaModelTuples
     lambdaModelTrackerTuplesOption = _lambdaModelTrackerTuplesOption
@@ -301,6 +281,7 @@ protected[ml] class Driver(
 
     lambdaModelTrackerTuplesOption.foreach { modelTrackersMap =>
       logger.info(s"optimization state tracker information:")
+
       modelTrackersMap.foreach { case (regularizationWeight, modelTracker) =>
         logger.info(s"model with regularization weight $regularizationWeight: " +
                     s"${modelTracker.optimizationStateTrackerString}")
@@ -313,15 +294,21 @@ protected[ml] class Driver(
       // Calculate metrics for all (models, iterations)
       lambdaModelTrackerTuplesOption.foreach { weightModelTrackerTuples =>
         weightModelTrackerTuples.foreach { case (lambda, modelTracker) =>
-          val msg = modelTracker.models
-            .map(model => Evaluation.evaluate(model, validatingData))
+          val msg = modelTracker
+            .models
+            .map(Evaluation.evaluate(_, validatingData))
             .zipWithIndex
-            .map(x => {
+            .map { x =>
               val (m, idx) = x
-              m.keys.toSeq.sorted.map(y => {
-                f"Iteration: [$idx%6d] Metric: [$y] value: ${m.get(y).get}"
-              }).mkString("\n")
-            }).mkString("\n")
+
+              m.keys
+                .toSeq
+                .sorted
+                .map(y => f"Iteration: [$idx%6d] Metric: [$y] value: ${m.get(y).get}")
+                .mkString("\n")
+            }
+            .mkString("\n")
+
           logger.info(s"Model with lambda = $lambda:\n$msg")
         }
       }
@@ -329,11 +316,16 @@ protected[ml] class Driver(
       // Calculate metrics for all models
       lambdaModelTuples.foreach { case (lambda: Double, model: GeneralizedLinearModel) =>
         val metrics = Evaluation.evaluate(model, validatingData)
-        perModelMetrics += (lambda -> metrics)
-        val msg = metrics.keys.toSeq.sorted.map(y => {
-          f"    Metric: [$y] value: ${metrics.get(y).get}"
-        }).mkString("\n")
+        val msg = metrics
+          .keys
+          .toSeq
+          .sorted
+          .map(y => f"    Metric: [$y] value: ${metrics.get(y).get}")
+          .mkString("\n")
+
         logger.info(s"Model with lambda = $lambda:\n$msg")
+
+        perModelMetrics += (lambda -> metrics)
       }
     }
   }
@@ -360,7 +352,11 @@ protected[ml] class Driver(
 
     logger.info(s"Regularization weight of the best model is: $bestModelWeight")
     val bestModelDir = new Path(params.outputDir, BEST_MODEL_TEXT).toString
-    suite.writeModelsInText(sc, List((bestModelWeight, bestModel)), bestModelDir.toString)
+    IOUtils.writeModelsInText(sc,
+      List((bestModelWeight, bestModel)),
+      bestModelDir.toString,
+      inputDataFormat.indexMapLoader()
+    )
     logger.info(s"The best model is written to: $bestModelDir")
   }
 
@@ -377,7 +373,7 @@ protected[ml] class Driver(
 
   protected def initializeDiagnosticReport(): Unit = {
     diagnostic = new DiagnosticReport(
-      new SystemReport(suite.featureKeyToIdMap, params, summaryOption),
+      new SystemReport(inputDataFormat.indexMapLoader().indexMapForDriver(), params, summaryOption),
       new ListBuffer[ModelDiagnosticReport[GeneralizedLinearModel]]())
   }
 
@@ -394,7 +390,7 @@ protected[ml] class Driver(
       maxNumIter = params.maxNumIter,
       tolerance = params.tolerance,
       enableOptimizationStateTracker = params.enableOptimizationStateTracker,
-      constraintMap = suite.constraintFeatureMap,
+      constraintMap = inputDataFormat.constraintFeatureMap(),
       warmStartModels = y,
       treeAggregateDepth = params.treeAggregateDepth)._1
   }
@@ -404,7 +400,7 @@ protected[ml] class Driver(
     logger.info(s"Starting training diagnostics")
     val lambdaModelMap = lambdaModelTuples.toMap[Double, GeneralizedLinearModel]
     val lambdaFitMap = new FittingDiagnostic().diagnose(trainFunc, lambdaModelMap, trainingData, summaryOption, seed)
-    val lambdaBootstrapMap = new BootstrapTrainingDiagnostic(suite.featureKeyToIdMap)
+    val lambdaBootstrapMap = new BootstrapTrainingDiagnostic(inputDataFormat.indexMapLoader().indexMapForDriver())
         .diagnose(trainFunc, lambdaModelMap, trainingData, summaryOption)
     val trainDiagnosticTime = (System.currentTimeMillis - trainDiagnosticStart) / 1000.0
     logger.info(f"Training diagnostic time elapsed: $trainDiagnosticTime%.03f(s)")
@@ -416,8 +412,12 @@ protected[ml] class Driver(
 
     val modelDiagnosticStart = System.currentTimeMillis
     logger.info(s"Starting model diagnostics")
-    val meanImportanceDiagnostic = new ExpectedMagnitudeFeatureImportanceDiagnostic(suite.featureKeyToIdMap)
-    val varImportanceDiagnostic = new VarianceFeatureImportanceDiagnostic(suite.featureKeyToIdMap)
+    val meanImportanceDiagnostic = new ExpectedMagnitudeFeatureImportanceDiagnostic(
+      inputDataFormat.indexMapLoader().indexMapForDriver())
+
+    val varImportanceDiagnostic = new VarianceFeatureImportanceDiagnostic(
+      inputDataFormat.indexMapLoader().indexMapForDriver())
+
     val predictionErrorDiagnostic = new PredictionErrorIndependenceDiagnostic()
     val lambdaMeanVarImportancePredictionErrorMap =
       lambdaModelTuples.map(x => (x._1,
@@ -469,7 +469,7 @@ protected[ml] class Driver(
         model,
         lambda,
         s"${model.getClass.getName} @ lambda = $lambda",
-        suite.featureKeyToIdMap,
+        inputDataFormat.indexMapLoader().indexMapForDriver(),
         metrics = perModelMetrics.getOrElse(lambda, Map.empty),
         summaryOption,
         predictionErrorIndependence = lambdaPredictionErrorIndependenceReport.get(lambda),
@@ -528,12 +528,12 @@ protected[ml] class Driver(
 }
 
 /**
- * The container of the main function, where the input command line arguments are parsed into [[Params]] via
- * [[PhotonMLCmdLineParser]], which in turn is to be consumed by the main Driver class.
- *
- * An example of running Photon-ML through command line arguments can be found at
- * [[https://github.com/linkedin/photon-ml#example-scripts]].
- */
+  * The container of the main function, where the input command line arguments are parsed into [[Params]] via
+  * [[PhotonMLCmdLineParser]], which in turn is to be consumed by the main Driver class.
+  *
+  * An example of running Photon-ML through command line arguments can be found at
+  * [[https://github.com/linkedin/photon-ml#example-scripts]].
+  */
 object Driver {
   val DEFAULT_STORAGE_LEVEL = StorageLevel.MEMORY_AND_DISK
   val LEARNED_MODELS_TEXT = "learned-models-text"

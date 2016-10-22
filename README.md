@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/linkedin/photon-ml.svg?branch=master)](https://travis-ci.org/linkedin/photon-ml)
 
+**New**: check out our [hands-on tutorial](https://github.com/linkedin/photon-ml/wiki/Photon-ML-Tutorial).
+
 **Photon Machine Learning (Photon ML)** is a machine learning library based upon [Apache Spark](http://spark.apache.org/) originally developed by the LinkedIn Machine Learning Algorithms team.
 
 It's designed to be flexible, scalable and efficient, while providing handy analytical abilities to help modelers / data scientists make predictions easily and quickly.
@@ -25,6 +27,7 @@ It's designed to be flexible, scalable and efficient, while providing handy anal
     - [Train the Model](#train-the-model)
   - [Running Photon ML on Cluster Mode](#running-photon-ml-on-cluster-mode)
 - [How to Contribute](#how-to-contribute)
+- [Reference](#reference)
 
 <!-- /MarkdownTOC -->
 
@@ -32,23 +35,27 @@ It's designed to be flexible, scalable and efficient, while providing handy anal
 ## Features
 **Photon ML** currently supports:
 
-1. Generalized Linear Model:
-  * Logistic Regression with L1/L2/Elastic Net regularization
-  * Poisson Regression with L1/L2/Elastic Net regularization
-  * Lasso/Ridge Linear Regression
+1. Generalized Linear Models:
+  * Linear Regression
+  * Logistic Regression
+  * Poisson Regression
 
-2. Boxed constraints towards model coefficients, e.g. [0.1 <= wi <= 0.9] where wi is the model coefficient at dimension i
+2. Regularization:
+  * The LBFGS optimizer supports L1, L2, and Elastic Net regularization
+  * The TRON optimizer supports L2 regularization
 
-3. Feature scaling and normalization:
+3. Boxed constraints towards model coefficients, e.g. [0.1 <= wi <= 0.9] where wi is the model coefficient at dimension i
+
+4. Feature scaling and normalization:
   * Zero-mean, unit-variant normalization (with efficient optimization techniques that pertains vector sparsity)
   * Scaling by standard deviation
   * Scaling to range [-1, 1]
 
-4. Offset training: a typical naive way of training multi-layer models. Offset is a special feature with a fixed model coefficient as 1. It's used to insert a smaller model's response into a global model. For example, when doing a typical binary classification problem, we could train a different model against a subset of all the features, and then set that model's response score as an offset of the global model training data. In this way, the global model will only learn against the residuals of the 1st layer model's response while having the benefits of combining the two models together.
+5. Offset training: a typical naive way of training multi-layer models. Offset is a special feature with a fixed model coefficient as 1. It's used to insert a smaller model's response into a global model. For example, when doing a typical binary classification problem, we could train a different model against a subset of all the features, and then set that model's response score as an offset of the global model training data. In this way, the global model will only learn against the residuals of the 1st layer model's response while having the benefits of combining the two models together.
 
-5. Feature summarization: **note** it's a direct wrapper of Spark MLLIB Feature summarizer, providing typical metrics (mean, min, max, std, variance and etc.) on a per feature basis
+6. Feature summarization: **note** it's a direct wrapper of Spark MLLIB Feature summarizer, providing typical metrics (mean, min, max, std, variance and etc.) on a per feature basis
 
-6. Model diagnostic tools: metrics, plots and summarization page for diagnosing model performance. The supported functions include:
+7. Model diagnostic tools: metrics, plots and summarization page for diagnosing model performance. The supported functions include:
   * rocAUC, prAUC, precision, recall, F1, RMSE plotted under different regularization weights
   * Error / Prediction Independence Analysis
   * [Kendall Tau Independence Test](http://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/kend_tau.htm)
@@ -59,18 +66,23 @@ It's designed to be flexible, scalable and efficient, while providing handy anal
 ## Experimental Features
 Photon ML currently contains a number of experimental features that have not been fully tested, and as such should not be used in production. These features center mostly around the **GAME (Generalized Additive Mixed Effect)** modules.
 
+#### Smoothed Hinge Loss Linear SVM
+In addition to the Generalized Linear Models described above, Photon-ML also supports an optimizer-friendly approximation for linear SVMs as described [here](http://qwone.com/~jason/writing/smoothHinge.pdf) by Jason D. M. Rennie.
+
 ### GAME - Generalized Additive Mixed Effect Model
 GAME is a specific expansion of traditional Generalized Linear Models that further provides entity level (e.g., per-user/per-item) or segment level (e.g., per-country/per-category) coefficients, also known as random effects in the statistics literature, in addition to global coefficients. It manages to scale model training up to hundreds of billions of coefficients while still solvable within Spark's framework.
 
-GAME models consist of three components:
-  * One fixed effect model:
-    * The fixed effect model is effectively a conventional generalized linear model. Its parameters are "global" in the sense that they apply uniformly to all entities.
-  * Multiple random effect models:
-    * Random effect models consist of "local" parameters – entity-specific coefficients that can be seen as random deviations from the global mean. In other words, they are personalized models.
-  * Optionally a matrix factorization model:
-    * The matrix factorization model captures interactions between the different random effect models.
+Currently Photon-ML supports GAME models composed of the following three types of components:
+  * Fixed effect model:
+    * Each fixed effect model is effectively a conventional generalized linear model. Its parameters are "global" in the sense that they apply uniformly to all entities.
+  * Random effect model:
+    * Each random effect model consists of "local" parameters – entity-specific coefficients that can be seen as random deviations from the global mean. For example, a per-user random effect models each user's behavior through user-specific coefficients.
+  * Matrix factorization model:
+    * Conventional matrix factorization model that captures interactions between two types of random effects (e.g., user and item) in the latent space.
 
-The main difference between a GAME model and a conventional linear model is that GAME includes per-entity sub-models for personalization. An entity can be thought of as a logical grouping of data around some object or person, say a member. In GAME, each entity has its own RandomEffect optimization problem, where the training data have been grouped and partitioned by entity.
+For example, a GAME model for movie recommendation can be formulated as fixed effect model + per-user random effect model + per-movie random effect model + user-movie matrix factorization model. More details on GAME models can be found [here](https://docs.google.com/presentation/d/1vHanpK3KLIVgdDIHYRehUeyb04Hc2AasbBHs4InVPSU).
+
+One exemplary type of GAME model supported in Photon-ML is [GLMix](https://github.com/linkedin/photon-ml#reference), which has been adopted to serve the machine learning components of LinkedIn's core products, including: jobs search and recommendation, news feed ranking, Ads CTR prediction and "People Also Viewed". More details on GLMix models can be found [here](https://docs.google.com/presentation/d/1tYoelUma9-MMYdteWYS31LqVeoyPEncxJRk-k57gj0A/edit?usp=sharing).
 
 The relevant code can be found in the following namespaces:
  * com.linkedin.photon.ml.algorithm
@@ -178,7 +190,9 @@ Below is a command to build the photon-all jar:
 
 ### Try It Out!
 
-Follow these steps to train a logistic regression model with Photon ML.
+The easiest way to get started with Photon ML is to try the tutorial we created to demonstrate how generalized linear mixed-effect models can be applied to build a personalized recommendation system. You can view the instructions on the wiki [here](https://github.com/linkedin/photon-ml/wiki/Photon-ML-Tutorial).
+
+Alternatively, you can follow these steps to try Photon ML on your machine.
 
 #### Install Spark
 
@@ -287,3 +301,6 @@ Detailed usages are described via command:
 
 ## How to Contribute
 We welcome contributions. A good way to get started would be to begin with reporting an issue, participating in discussions, or sending out a pull request addressing an issue. For major functionality changes, it is highly recommended to exchange thoughts and designs with reviewers beforehand. Well communicated changes will have the highest probability of getting accepted.
+
+## Reference
+- XianXing Zhang, Yitong Zhou, Yiming Ma, Bee-Chung Chen, Liang Zhang and Deepak Agarwal. [GLMix: Generalized Linear Mixed Models For Large-Scale Response Prediction](http://www.kdd.org/kdd2016/papers/files/adf0562-zhangA.pdf). In 22nd SIGKDD Conference on Knowledge Discovery and Data Mining, 2016

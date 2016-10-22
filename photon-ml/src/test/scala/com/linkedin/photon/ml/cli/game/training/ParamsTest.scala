@@ -14,49 +14,37 @@
  */
 package com.linkedin.photon.ml.cli.game.training
 
-import scala.collection.{Map, Set}
-
 import com.linkedin.photon.ml.data.{RandomEffectDataConfiguration, FixedEffectDataConfiguration}
 import com.linkedin.photon.ml.io.ModelOutputMode
 import com.linkedin.photon.ml.optimization.game.{MFOptimizationConfiguration, GLMOptimizationConfiguration}
 import com.linkedin.photon.ml.supervised.TaskType
-import com.linkedin.photon.ml.test.CommonTestUtils
+import com.linkedin.photon.ml.test.CommonTestUtils._
 
 import org.testng.Assert._
-import org.testng.annotations.Test
+import org.testng.annotations.{DataProvider, Test}
 
 
 /**
- * Simple test for GAME's [[Params]]
+ * Simple test for GAME training's [[Params]]
  */
 class ParamsTest {
 
   import ParamsTest._
 
-  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
-  def testMissingRequiredArgTrainDir(): Unit = {
-    Params.parseFromCommandLine(requiredArgsMissingOne(TRAIN_INPUT_DIRS))
+  @DataProvider
+  def requiredOptions(): Array[Array[Any]] = {
+    REQUIRED_OPTIONS.map(optionName => Array[Any](optionName))
   }
 
-  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
-  def testMissingRequiredArgOutputDir(): Unit = {
-    Params.parseFromCommandLine(requiredArgsMissingOne(OUTPUT_DIR))
-  }
-
-  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
-  def testMissingRequiredArgTaskType(): Unit = {
-    Params.parseFromCommandLine(requiredArgsMissingOne(TASK_TYPE))
-  }
-
-  @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
-  def testMissingRequiredArgFeatureNameAndTermSetInputPath(): Unit = {
-    Params.parseFromCommandLine(requiredArgsMissingOne(FEATURE_NAME_AND_TERM_SET_PATH))
+  @Test(dataProvider = "requiredOptions", expectedExceptions = Array(classOf[IllegalArgumentException]))
+  def testMissingRequiredArg(optionName: String): Unit = {
+    Params.parseFromCommandLine(requiredArgsMissingOne(optionName))
   }
 
   @Test(expectedExceptions = Array(classOf[IllegalArgumentException]))
   def testDuplicatedArgs(): Unit = {
     val args = requiredArgs()
-    val duplicatedArgs = args ++ Array(CommonTestUtils.fromOptionNameToArg(TRAIN_INPUT_DIRS), "duplicate")
+    val duplicatedArgs = mapToArray(args) ++ Array(fromOptionNameToArg(TRAIN_INPUT_DIRS), "duplicate")
     Params.parseFromCommandLine(duplicatedArgs)
   }
 
@@ -65,10 +53,11 @@ class ParamsTest {
     val params = Params.parseFromCommandLine(requiredArgs())
 
     // Verify required parameters values
-    assertEquals(params.trainDirs.deep, Array("value").deep)
-    assertEquals(params.outputDir, "value")
-    assertEquals(params.featureNameAndTermSetInputPath, "value")
+    assertEquals(params.trainDirs.deep, Array(TRAIN_INPUT_DIRS).deep)
+    assertEquals(params.outputDir, OUTPUT_DIR)
+    assertEquals(params.featureNameAndTermSetInputPath, FEATURE_NAME_AND_TERM_SET_PATH)
     assertEquals(params.taskType, TaskType.LINEAR_REGRESSION)
+    assertEquals(params.updatingSequence, Seq(UPDATING_SEQUENCE))
 
     // Verify optional parameters values, should be default values
     assertEquals(params.trainDateRangeOpt, defaultParams.trainDateRangeOpt)
@@ -80,7 +69,6 @@ class ParamsTest {
     assertEquals(params.featureShardIdToFeatureSectionKeysMap, defaultParams.featureShardIdToFeatureSectionKeysMap)
     assertEquals(params.featureShardIdToInterceptMap, defaultParams.featureShardIdToInterceptMap)
     assertEquals(params.numIterations, defaultParams.numIterations)
-    assertEquals(params.updatingSequence, defaultParams.updatingSequence)
     assertEquals(params.fixedEffectOptimizationConfigurations, defaultParams.fixedEffectOptimizationConfigurations)
     assertEquals(params.fixedEffectDataConfigurations, defaultParams.fixedEffectDataConfigurations)
     assertEquals(params.randomEffectOptimizationConfigurations, defaultParams.randomEffectOptimizationConfigurations)
@@ -247,9 +235,9 @@ class ParamsTest {
     import RandomEffectDataConfiguration.{FIRST_LEVEL_SPLITTER => F}
     import RandomEffectDataConfiguration.{SECOND_LEVEL_SPLITTER => S}
 
-    val config1InStr = s"randomEffectId${F}featureShardId${F}1${F}10${F}5${F}20d${F}random${S}5"
-    val config2InStr = s"randomEffectId${F}featureShardId${F}1${F}10${F}5${F}20d${F}index_map"
-    val config3InStr = s"randomEffectId${F}featureShardId${F}1${F}10${F}5${F}20d${F}identity"
+    val config1InStr = s"randomEffectType${F}featureShardId${F}1${F}10${F}5${F}20d${F}random${S}5"
+    val config2InStr = s"randomEffectType${F}featureShardId${F}1${F}10${F}5${F}20d${F}index_map"
+    val config3InStr = s"randomEffectType${F}featureShardId${F}1${F}10${F}5${F}20d${F}identity"
 
     val argValueInStr = s"random1:$config1InStr|random2:$config2InStr|random3:$config3InStr"
     val params = Params.parseFromCommandLine(setOneMoreArg(RANDOM_EFFECT_DATA_CONFIGURATIONS, argValueInStr))
@@ -258,6 +246,14 @@ class ParamsTest {
     val config3 = RandomEffectDataConfiguration.parseAndBuildFromString(config3InStr)
     val expectedValue = Map("random1" -> config1, "random2" -> config2, "random3" -> config3)
     assertEquals(params.randomEffectDataConfigurations, expectedValue)
+  }
+
+  @Test
+  def testComputeVariance(): Unit = {
+    val paramsAll = Params.parseFromCommandLine(setOneMoreArg(COMPUTE_VARIANCE, "trUE"))
+    assertEquals(paramsAll.computeVariance, true)
+    val paramsNone = Params.parseFromCommandLine(setOneMoreArg(COMPUTE_VARIANCE, "fAlSe"))
+    assertEquals(paramsNone.computeVariance, false)
   }
 
   @Test
@@ -297,6 +293,17 @@ class ParamsTest {
     val params = Params.parseFromCommandLine(setOneMoreArg(APPLICATION_NAME, "GAME_TEST"))
     assertEquals(params.applicationName, "GAME_TEST")
   }
+
+  @Test
+  def testOutputDir(): Unit = {
+    // When output directory contains ':'
+    val paramsWithColonAsPartOfOutputDir = Params.parseFromCommandLine(setOneMoreArg(OUTPUT_DIR, "hdfs://foo/bar/tar"))
+    assertEquals(paramsWithColonAsPartOfOutputDir.outputDir, "hdfs://foo/bar/tar")
+
+    // When output directory contains ',', the current logic will replace ',' with '_'
+    val paramsWithCommaAsPartOfOutputDir = Params.parseFromCommandLine(setOneMoreArg(OUTPUT_DIR, "linkedin,airbnb"))
+    assertEquals(paramsWithCommaAsPartOfOutputDir.outputDir, "linkedin_airbnb")
+  }
 }
 
 
@@ -308,6 +315,7 @@ object ParamsTest {
   val TASK_TYPE = "task-type"
   val OUTPUT_DIR = "output-dir"
   val FEATURE_NAME_AND_TERM_SET_PATH = "feature-name-and-term-set-path"
+  val UPDATING_SEQUENCE = "updating-sequence"
 
   // Optional parameters
   val TRAIN_DATE_RANGE = "train-date-range"
@@ -319,7 +327,7 @@ object ParamsTest {
   val FEATURE_SHARD_ID_TO_FEATURE_SECTION_KEYS_MAP = "feature-shard-id-to-feature-section-keys-map"
   val FEATURE_SHARD_ID_TO_INTERCEPT_MAP = "feature-shard-id-to-intercept-map"
   val NUM_ITERATIONS = "num-iterations"
-  val UPDATING_SEQUENCE = "updating-sequence"
+  val COMPUTE_VARIANCE = "compute-variance"
   val FIXED_EFFECT_OPTIMIZATION_CONFIGURATIONS = "fixed-effect-optimization-configurations"
   val FIXED_EFFECT_DATA_CONFIGURATIONS = "fixed-effect-data-configurations"
   val RANDOM_EFFECT_OPTIMIZATION_CONFIGURATIONS = "random-effect-optimization-configurations"
@@ -331,47 +339,50 @@ object ParamsTest {
   val DELETE_OUTPUT_DIR_IF_EXISTS = "delete-output-dir-if-exists"
   val APPLICATION_NAME = "application-name"
 
-  val REQUIRED_OPTIONS = Array(TRAIN_INPUT_DIRS, OUTPUT_DIR, TASK_TYPE, FEATURE_NAME_AND_TERM_SET_PATH)
+  val REQUIRED_OPTIONS =
+    Array(TRAIN_INPUT_DIRS, OUTPUT_DIR, TASK_TYPE, FEATURE_NAME_AND_TERM_SET_PATH, UPDATING_SEQUENCE)
 
   // Get all required arguments
-  def requiredArgs(): Array[String] = {
-    val args = new Array[String](REQUIRED_OPTIONS.length * 2)
+  def requiredArgs(): Map[String, String] = {
+    val args = new Array[(String, String)](REQUIRED_OPTIONS.length)
     var i = 0
     REQUIRED_OPTIONS.foreach { option =>
-      args(i) = CommonTestUtils.fromOptionNameToArg(option)
-      args(i + 1) = option match {
+      val name = fromOptionNameToArg(option)
+      val value = option match {
         case TASK_TYPE => TaskType.LINEAR_REGRESSION.toString
-        case _ => "value"
+        // We don't really care what the value is, as long as it meets the type requirement. But here we use the
+        // option string itself as value, so that at least we can guarantee different names have different values.
+        case _ => option
       }
-      i += 2
+      args(i) = (name, value)
+      i += 1
     }
-    args
+    args.toMap
   }
 
   // Get all required arguments except the one with name missingArgName
-  def requiredArgsMissingOne(missingArgName: String): Array[String] = {
+  def requiredArgsMissingOne(missingArgName: String): Map[String, String] = {
     if (REQUIRED_OPTIONS.isEmpty) {
       throw new RuntimeException("No required option configured in test.")
     }
-
-    val args = new Array[String]((REQUIRED_OPTIONS.length - 1) * 2)
+    val args = new Array[(String, String)](REQUIRED_OPTIONS.length - 1)
     var i = 0
     REQUIRED_OPTIONS.filter(_ != missingArgName).foreach { option =>
-      args(i) = CommonTestUtils.fromOptionNameToArg(option)
-      args(i + 1) = option match {
+      val name = fromOptionNameToArg(option)
+      val value = option match {
         case TASK_TYPE => TaskType.LINEAR_REGRESSION.toString
-        case _ => "value"
+        case _ => option
       }
-      i += 2
+      args(i) = (name, value)
+      i += 1
     }
-    args
+    args.toMap
   }
 
   // Set one more optional argument besides the required arguments
-  def setOneMoreArg(argName: String, argValue: String): Array[String] = {
-    val args = new Array[String](2)
-    args(0) = CommonTestUtils.fromOptionNameToArg(argName)
-    args(1) = argValue
-    args ++ requiredArgs()
+  def setOneMoreArg(argName: String, argValue: String): Map[String, String] = {
+    val name = fromOptionNameToArg(argName)
+    val value = argValue
+    requiredArgs().updated(name, value)
   }
 }
